@@ -1,0 +1,558 @@
+---
+title: "ASZ survey - analysis"
+author: "gian-andrea egeler, 2021"
+output: html_document
+---
+
+
+
+```{r setup, message=FALSE, echo = FALSE}
+
+# load functions
+source("R/config_path.R")
+source("R/06_function_read_survey_data_AZ.R")
+
+#define file and path
+filename = here::here("raw data/survey/ASZ/", "eingabemaske_befragung_asz_10112020_02egel_anonym.xlsx")
+
+#load data
+df_long_survey_asz <- read_survey_long(filename)
+df_wide_survey_asz <- read_survey_wide(filename) %>% 
+  mutate(gender = str_replace(.$gender, "keine Angaben", "keine Angabe"))
+
+```
+
+```{r prop.table of intervention}
+
+#prop table
+az = paste0("AZ", seq = 1:4)
+
+for (i in az) {
+ df_till_asz %>% 
+    filter(condit != "Nachher" & ASZ == toString(i)) %>% 
+  #split(.$ASZ) %>% 
+    group_by(condit, meal_label) %>% 
+    summarise(tot = sum(tot_sold)) %>% 
+    mutate(pct = tot / sum(tot)) %>% 
+    ungroup() %>% 
+    mutate(diff = .[.$condit == "Intervention"& meal_label == "vegetarian", ]$pct / .[.$condit == "Vorher" & meal_label == "vegetarian", ]$pct -1) %>%  #calculate difference between conditions in percent (only vegetarian!)
+    write_delim(., here::here("augmented data/stats", paste0("intervention_prop_table", i, ".csv")), delim = ";")
+  
+  message("calculate prop table of intervention of ", i)
+  
+}
+
+####
+# AZ1: no diff
+####
+
+#stats for it
+library(ggfortify)
+
+#fit model
+fitted_model <- df_till_asz %>% 
+   filter(condit != "Nachher" & ASZ == "AZ1") %>% #drop nachher 
+   mutate(condit = factor(condit, levels = c("Vorher","Intervention"))) %>% 
+   do(model1 = glm(log10(tot_sold) ~ condit, family = "quasipoisson", data = .),
+      model2 = wilcox.test(.$tot_sold ~ .$condit)) #normalverteilung not good, even with tranformation
+ 
+#check diagnostics
+plt <- ggplot2::autoplot(fitted_model$model1[[1]])
+ggplot2::ggsave(plot = plt, here::here("augmented data/stats", "diagnostics_glm_AZ1.png"), device = "png")
+
+ggplot2::ggplot(df_till_asz[df_till_asz$condit != "Nachher" & df_till_asz$ASZ == "AZ1", ], aes(y = tot_sold, x = condit)) +
+                  geom_violin() +
+                  geom_point(position = "jitter") +
+                  ggsave(here::here("augmented data/stats", "boxplot_AZ1.png"), 
+                         device = "png")
+
+#save output
+summary.lm(fitted_model$model1[[1]]) %>% 
+  capture.output(., file = here::here("augmented data/stats", "intervention_stats_AZ1.csv"))
+
+fitted_model$model2[[1]] %>% 
+  capture.output(., file = here::here("augmented data/stats", "intervention_wilkox_AZ1.csv"))
+
+
+#ttest between weeks
+df_till_asz %>% 
+  group_by(kw, meal_label, condit) %>% 
+  summarise(tot = sum(tot_sold)) %>% 
+  ungroup()-> df_ttest
+
+model3 = aov(tot ~ condit * meal_label, data = df_ttest)
+
+summary.lm(model3) %>% 
+  capture.output(., file = here::here("augmented data/stats", "intervention_ttest_AZ1.csv"))
+
+
+####
+# AZ2: no diff
+####
+
+
+#fit model
+fitted_model <- df_till_asz %>% 
+   filter(condit != "Nachher" & ASZ == "AZ2") %>% #drop nachher 
+   mutate(condit = factor(condit, levels = c("Vorher","Intervention"))) %>% 
+   do(model1 = glm(log10(tot_sold) ~ condit, family = "quasipoisson", data = .),
+      model2 = wilcox.test(.$tot_sold ~ .$condit), 
+      model3 = t.test(.$tot_sold ~ .$condit)) #normalverteilung not good, even with tranformation
+ 
+#check diagnostics
+plt <- ggplot2::autoplot(fitted_model$model1[[1]])
+ggplot2::ggsave(plot = plt, here::here("augmented data/stats", "diagnostics_glm_AZ2.png"), device = "png")
+
+ggplot2::ggplot(df_till_asz[df_till_asz$condit != "Nachher" & df_till_asz$ASZ == "AZ2", ], aes(y = tot_sold, x = condit)) +
+                  geom_violin() +
+                  geom_point(position = "jitter") +
+                  ggsave(here::here("augmented data/stats", "boxplot_AZ2.png"), 
+                         device = "png")
+
+#save output
+summary.lm(fitted_model$model1[[1]]) %>% 
+  capture.output(., file = here::here("augmented data/stats", "intervention_stats_AZ2.csv"))
+
+fitted_model$model2[[1]] %>% 
+  capture.output(., file = here::here("augmented data/stats", "intervention_wilkox_AZ2.csv"))
+
+fitted_model$model3[[1]] %>% 
+  capture.output(., file = here::here("augmented data/stats", "intervention_ttest_AZ2.csv"))
+
+
+####
+# AZ3: no diff
+####
+
+#fit model
+fitted_model <- df_till_asz %>% 
+   filter(condit != "Nachher" & ASZ == "AZ3") %>% #drop nachher 
+   mutate(condit = factor(condit, levels = c("Vorher","Intervention"))) %>% 
+   do(model1 = glm(log10(tot_sold) ~ condit, family = "quasipoisson", data = .),
+      model2 = wilcox.test(.$tot_sold ~ .$condit), 
+      model3 = t.test(.$tot_sold ~ .$condit)) #normalverteilung not good, even with tranformation
+ 
+#check diagnostics
+plt <- ggplot2::autoplot(fitted_model$model1[[1]])
+ggplot2::ggsave(plot = plt, here::here("augmented data/stats", "diagnostics_glm_AZ3.png"), device = "png")
+
+ggplot2::ggplot(df_till_asz[df_till_asz$condit != "Nachher" & df_till_asz$ASZ == "AZ3", ], aes(y = tot_sold, x = condit)) +
+                  geom_violin() +
+                  geom_point(position = "jitter") +
+                  ggsave(here::here("augmented data/stats", "boxplot_AZ3.png"), 
+                         device = "png")
+
+#save output
+summary.lm(fitted_model$model1[[1]]) %>% 
+  capture.output(., file = here::here("augmented data/stats", "intervention_stats_AZ3.csv"))
+
+fitted_model$model2[[1]] %>% 
+  capture.output(., file = here::here("augmented data/stats", "intervention_wilkox_AZ3.csv"))
+
+fitted_model$model3[[1]] %>% 
+  capture.output(., file = here::here("augmented data/stats", "intervention_ttest_AZ3.csv"))
+
+
+####
+# AZ4: no diff
+####
+
+#fit model
+fitted_model <- df_till_asz %>% 
+   filter(condit != "Nachher" & ASZ == "AZ4") %>% #drop nachher 
+   mutate(condit = factor(condit, levels = c("Vorher","Intervention"))) %>% 
+   do(model1 = glm(log10(tot_sold) ~ condit, family = "quasipoisson", data = .), # mean is close to zero
+      model2 = wilcox.test(.$tot_sold ~ .$condit), 
+      model3 = t.test(.$tot_sold ~ .$condit)) #normalverteilung not good, even with tranformation
+ 
+#check diagnostics
+plt <- ggplot2::autoplot(fitted_model$model1[[1]])
+ggplot2::ggsave(plot = plt, here::here("augmented data/stats", "diagnostics_glm_AZ4.png"), device = "png")
+
+ggplot2::ggplot(df_till_asz[df_till_asz$condit != "Nachher" & df_till_asz$ASZ == "AZ4", ], aes(y = tot_sold, x = condit)) +
+                  geom_violin() +
+                  geom_point(position = "jitter") +
+                  ggsave(here::here("augmented data/stats", "boxplot_AZ4.png"), 
+                         device = "png")
+
+#save output
+summary.lm(fitted_model$model1[[1]]) %>% 
+  capture.output(., file = here::here("augmented data/stats", "intervention_stats_AZ4.csv"))
+
+fitted_model$model2[[1]] %>% 
+  capture.output(., file = here::here("augmented data/stats", "intervention_wilkox_AZ4.csv"))
+
+fitted_model$model3[[1]] %>% 
+  capture.output(., file = here::here("augmented data/stats", "intervention_ttest_AZ4.csv"))
+
+
+###t
+# test for diff between canteens and conditions
+####
+
+fitted_model <- df_till_asz %>% 
+  # filter(condit != "Nachher") %>% 
+  do(model1 = glm(tot_sold ~ condit * ASZ * meal_label, family = "quasipoisson", data = .))
+
+summary.lm(fitted_model$model1[[1]])
+
+```
+
+
+```{r stats wave0: age, gender, meal_choice, attitude}
+#####
+# T0
+#####
+
+#diff in age between canteens: PR1 are the youngest
+#boxplot: ok
+#novrmalverteilung: ok
+summary.lm(aov(age_years ~ ASZ, data = df_wide_survey_asz[df_wide_survey_asz$time == "T0",])) %>% 
+  capture.output(., file = here::here("augmented data/stats", "age_diff_canteen_t0_ASZ.csv"))
+
+aggregate(age_years ~ ASZ, data = df_wide_survey_asz[df_wide_survey_asz$time == "T0",], FUN = function(x) c(mn = mean(x), n = length(x) )) %>% 
+  capture.output(., file = here::here("augmented data/stats", "age_mean_t0_ASZ.csv"))
+  
+
+#diff in gender
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$gender, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "gender_diff_canteen_t0_ASZ.csv"))
+
+df_wide_survey_asz[df_wide_survey_asz$time == "T0",] %>% 
+  split(.$ASZ) %>% 
+  map(~ Hmisc::describe(.$gender)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "gender_share_t0_ASZ.csv"))
+
+
+Hmisc::describe(df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$gender) %>% #attention keine Angabe is also count
+  capture.output(., file = here::here("augmented data/stats", "gender_overall_t0_ASZ.csv"))
+
+
+#diff in meal_choice: differences
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$meal_content, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "meal_content_diff_canteen_t0_ASZ.csv"))
+
+
+#diff in knowledge
+
+#no diff in environment
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$know_1, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_1_diff_canteen_t0_ASZ.csv"))
+
+#no diff in airplane
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$know_2, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_2_diff_canteen_t0_ASZ.csv"))
+
+#no diff in animals
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$know_3, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_3_diff_canteen_t0_ASZ.csv"))
+
+#no diff: saisonal
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$know_4, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_4_diff_canteen_t0_ASZ.csv"))
+
+#sign, diff: organic and environment
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$know_5, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_5_diff_canteen_t0_ASZ.csv"))
+
+
+#sign diff in pictures
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$know_6, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_6_diff_canteen_t0_ASZ.csv"))
+
+
+#diff in attitude
+
+#no diff 
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$att_1, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "att_1_diff_canteen_t0_ASZ.csv"))
+
+#no diff 
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$att_2, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "att_2_diff_canteen_t0_ASZ.csv"))
+
+#sign diff in seasonal products
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$att_3, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "att_3_diff_canteen_t0_ASZ.csv"))
+
+#no diff: 
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$att_4, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "att_4_diff_canteen_t0_ASZ.csv"))
+
+#sign, diff: organic and environment
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T0",]$att_5, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "att_5_diff_canteen_t0_ASZ.csv"))
+
+```
+
+
+```{r stats wave 1: age, gender, meal_choice, knwoledge, attitude}
+#####
+# T1
+#####
+
+#diff in age between canteens: no diff
+#boxplot: ok
+#novrmalverteilung: ok
+summary.lm(aov(age_years ~ ASZ, data = df_wide_survey_asz[df_wide_survey_asz$time == "T1",])) %>% 
+  capture.output(., file = here::here("augmented data/stats", "age_diff_canteen_t1_ASZ.csv"))
+
+aggregate(age_years ~ ASZ, data = df_wide_survey_asz[df_wide_survey_asz$time == "T1",], FUN = function(x) c(mn = mean(x), n = length(x))) %>% 
+  capture.output(., file = here::here("augmented data/stats", "age_mean_t1_ASZ.csv"))
+
+
+#gender
+df_wide_survey_asz[df_wide_survey_asz$time == "T1",] %>% 
+  split(.$ASZ) %>% 
+  map(~ Hmisc::describe(.$gender)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "gender_share_t1_ASZ.csv"))
+
+
+Hmisc::describe(df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$gender) %>% #attention keine Angabe is also count
+  capture.output(., file = here::here("augmented data/stats", "gender_overall_t1_ASZ.csv"))
+  
+
+#diff in gender
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$gender, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "gender_diff_canteen_t1_ASZ.csv"))
+
+
+# nodiff in meal_choice:
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$meal_content, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "meal_content_diff_canteen_T1_ASZ.csv"))
+
+
+#diff in knowledge
+#no diff in environment
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$know_1, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_1_diff_canteen_T1_ASZ.csv"))
+
+#no diff in airplane
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$know_2, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_2_diff_canteen_T1_ASZ.csv"))
+
+# diff in animals
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$know_3, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_3_diff_canteen_T1_ASZ.csv"))
+
+#no diff: saisonal
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$know_4, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_4_diff_canteen_T1_ASZ.csv"))
+
+#no diff: organic and environment
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$know_5, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_5_diff_canteen_T1_ASZ.csv"))
+
+
+#no diff in pictures
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$know_6, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_6_diff_canteen_T1_ASZ.csv"))
+
+
+#diff in attitude
+#no diff 
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$att_1, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "att_1_diff_canteen_T1_ASZ.csv"))
+
+#no diff 
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$att_2, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "att_2_diff_canteen_T1_ASZ.csv"))
+
+#no diff in seasonal products
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$att_3, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "att_3_diff_canteen_T1_ASZ.csv"))
+
+#no diff: 
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$att_4, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "att_4_diff_canteen_T1_ASZ.csv"))
+
+#no diff: organic and environment
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$ASZ, df_wide_survey_asz[df_wide_survey_asz$time == "T1",]$att_5, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "att_5_diff_canteen_T1_ASZ.csv"))
+
+```
+
+```{r stats diff in time per canteen: age, gender, meal_choice}
+#####
+# diff in time per canteen
+#####
+
+##AZ1
+
+AZ = "AZ1"
+
+##age: no diff
+summary.lm(aov(age_years ~ time, data = df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ])) %>%   capture.output(., file = here::here("augmented data/stats", paste0("age_test_", AZ, "_time_ASZ.csv")))
+
+aggregate(age_years ~ time, data = df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ),], FUN = function(x) c(mn = mean(x), len = length(x))) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("age_mean_", AZ, "_ASZ.csv")))
+  
+
+##gender: no diff
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$time, df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$gender, chisq = TRUE, fisher = TRUE, dnn = c("gender", "time")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("gender_test_", AZ, "_time_ASZ.csv")))
+
+
+#meal_choice: no diff
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$time, df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$meal_content, chisq = TRUE, fisher = TRUE, dnn = c("time", "meal_content")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("meal_content_test_", AZ, "_time_ASZ.csv")))
+
+
+##AZ2
+
+AZ = "AZ2"
+
+###age: no diff
+summary.lm(aov(age_years ~ time, data = df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ])) %>%   capture.output(., file = here::here("augmented data/stats", paste0("age_test_", AZ, "_time_ASZ.csv")))
+
+aggregate(age_years ~ time, data = df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ),], FUN = function(x) c(mn = mean(x), len = length(x))) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("age_mean_", AZ, "_ASZ.csv")))
+  
+
+##gender: no diff
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$time, df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$gender, chisq = TRUE, fisher = TRUE, dnn = c("time", "gender")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("gender_test_", AZ, "_time_ASZ.csv")))
+
+#meal_choice: no test necessary (thus no veg, only meat eaters)
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$time, df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$meal_content, chisq = TRUE, fisher = TRUE, dnn = c("time", "meal_content")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("meal_content_test_", AZ, "_time_ASZ.csv")))
+
+
+##AZ3
+
+AZ = "AZ3"
+
+###age: no diff
+summary.lm(aov(age_years ~ time, data = df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ])) %>%   
+  capture.output(., file = here::here("augmented data/stats", paste0("age_test_", AZ, "_time_ASZ.csv")))
+
+aggregate(age_years ~ time, data = df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ),], FUN = function(x) c(mn = mean(x), len = length(x))) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("age_mean_", AZ, "_ASZ.csv")))
+  
+
+##gender: diff in gender, t1 more men than women
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$time, df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$gender, chisq = TRUE, fisher = TRUE, dnn = c("time", "gender")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("gender_test_", AZ, "_time_ASZ.csv")))
+
+#meal_choice: no diff
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$time, df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$meal_content, chisq = TRUE, fisher = TRUE, dnn = c("time", "meal_content")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("meal_content_test_", AZ, "_time_ASZ.csv")))
+
+
+##AZ4
+
+AZ = "AZ4"
+
+###age: no diff
+summary.lm(aov(age_years ~ time, data = df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ])) %>%   
+  capture.output(., file = here::here("augmented data/stats", paste0("age_test_", AZ, "_time_ASZ.csv")))
+
+aggregate(age_years ~ time, data = df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ),], FUN = function(x) c(mn = mean(x), len = length(x))) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("age_mean_", AZ, "_ASZ.csv")))
+  
+
+##gender: diff in gender, t1 more men than women
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$time, df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$gender, chisq = TRUE, fisher = TRUE, dnn = c("time", "gender")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("gender_test_", AZ, "_time_ASZ.csv")))
+
+#meal_choice: no diff
+gmodels::CrossTable(df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$time, df_wide_survey_asz[df_wide_survey_asz$ASZ == toString(AZ), ]$meal_content, chisq = TRUE, fisher = TRUE, dnn = c("time", "meal_content")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("meal_content_test_", AZ, "_time_ASZ.csv")))
+
+```
+
+
+```{r stats diff time overall: age, gender, meal_choice, knowledge, attitude}
+#####
+# diff in time overall
+#####
+
+#diff in age between time: no diff
+#boxplot: ok
+#novrmalverteilung: ok
+summary.lm(aov(age_years ~ time, data = df_wide_survey_asz)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "age_test_time_ASZ.csv"))
+
+aggregate(age_years ~ time, data = df_wide_survey_asz, FUN = mean) %>% 
+  capture.output(., file = here::here("augmented data/stats", "age_mean_overall_ASZ.csv"))
+  
+
+#no diff in gender
+gmodels::CrossTable(df_wide_survey_asz$time, df_wide_survey_asz$gender, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "gender_test_time_ASZ.csv"))
+
+
+# no diff  in meal_choice
+gmodels::CrossTable(df_wide_survey_asz$time, df_wide_survey_asz$meal_content, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "meal_content_test_time_ASZ.csv"))
+
+
+#diff in knowledge
+#no diff in environment
+gmodels::CrossTable(df_wide_survey_asz$time, df_wide_survey_asz$know_1, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_1_test_time_ASZ.csv"))
+
+#no diff in airplane
+gmodels::CrossTable(df_wide_survey_asz$time, df_wide_survey_asz$know_2, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_2_test_time_ASZ.csv"))
+
+# diff in animals
+gmodels::CrossTable(df_wide_survey_asz$time, df_wide_survey_asz$know_3, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_3_test_time_ASZ.csv"))
+
+#no diff: saisonal
+gmodels::CrossTable(df_wide_survey_asz$time, df_wide_survey_asz$know_4, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_4_test_time_ASZ.csv"))
+
+#no diff: organic and environment
+gmodels::CrossTable(df_wide_survey_asz$time, df_wide_survey_asz$know_5, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_5_test_time_ASZ.csv"))
+
+#overall
+df_long_survey_asz %>% 
+  filter(str_detect(questions, pattern = paste("know_", seq(1:5), sep = ""))) %>% 
+  mutate(answer = if_else(is.na(answer), "weiss nicht", answer))  -> df_know
+
+gmodels::CrossTable(df_know$time, df_know$answer, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data", "know_overall_test_time_ASZ.csv"))
+
+#sign diff in pictures
+gmodels::CrossTable(df_wide_survey_asz$time, df_wide_survey_asz$know_6, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "know_6_test_time_ASZ.csv"))
+
+
+#diff in attitude
+#no diff 
+gmodels::CrossTable(df_wide_survey_asz$time, df_wide_survey_asz$att_1, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "att_1_test_time_ASZ.csv"))
+
+#no diff 
+gmodels::CrossTable(df_wide_survey_asz$time, df_wide_survey_asz$att_2, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "att_2_test_time_ASZ.csv"))
+
+#no diff in seasonal products
+gmodels::CrossTable(df_wide_survey_asz$time, df_wide_survey_asz$att_3, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "att_3_test_time_ASZ.csv"))
+
+#no diff: 
+gmodels::CrossTable(df_wide_survey_asz$time, df_wide_survey_asz$att_4, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "att_4_test_time_ASZ.csv"))
+
+#no diff: organic and environment
+gmodels::CrossTable(df_wide_survey_asz$time, df_wide_survey_asz$att_5, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "att_5_test_time_ASZ.csv"))
+
+
+#overall
+pat = paste("att_", seq(1:5), sep = "")
+
+df_long_survey_asz %>% 
+    filter(str_detect(questions, pattern = pat)) %>% 
+  mutate(answer = if_else(is.na(answer), "weiss nicht", answer))  -> df_att
+
+gmodels::CrossTable(df_att$time, df_att$answer, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data", "att_overall_test_time_ASZ.csv"))
+
+
+```
+

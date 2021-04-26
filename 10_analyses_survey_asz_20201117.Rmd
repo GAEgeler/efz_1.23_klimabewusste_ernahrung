@@ -1,0 +1,453 @@
+---
+title: "ASZ survey - analysis"
+author: "gian-andrea egeler, 2020"
+output: html_document
+---
+
+
+```{r setup and load data, message=FALSE, echo = FALSE}
+
+knitr::opts_chunk$set(echo = F, message = F, fig.align = "center",
+                      out.width = "80%")
+
+# load functions
+source("R/config_path.R")
+source("R/06_function_read_survey_data_AZ.R")
+source("R/06_function_plot_single_items_AZ.R")
+source("R/06_function_treemap_AZ.R")
+source("R/06_function_plot_multiple_items_AZ.R") # the conditions are not good especially when labs are contained e.g. intervention or food featrues
+
+
+
+
+#define file and path
+filename = here::here("raw data/survey/ASZ/", "eingabemaske_befragung_asz_10112020_02egel_anonym.xlsx")
+
+#load data
+df_long_survey_asz <- read_survey_long(filename)
+df_wide_survey_asz <- read_survey_wide(filename) %>% 
+  mutate(gender = str_replace(.$gender, "keine Angaben", "keine Angabe"))
+
+```
+
+```{r sample stats}
+
+#participants t0
+df_wide_survey_asz %>% 
+  filter(time == "T0") %>% 
+  group_by(ASZ)%>% 
+  summarise(tot = n()) %>% 
+  mutate(pct = tot / sum(tot) *100)
+
+
+#participants t1
+df_wide_survey_asz %>% 
+  filter(time == "T1") %>% 
+  group_by(ASZ) %>% 
+  summarise(tot = n()) %>% 
+  mutate(pct = tot / sum(tot)*100)
+
+
+#mean age per canteen
+df_wide_survey_asz %>% 
+  filter(time == "T0") %>% 
+  split(.$ASZ) %>% 
+  purrr::map_df(~mean(.$age_years, na.rm = TRUE))
+
+#mean age per canteen
+df_wide_survey_asz %>% 
+  filter(time == "T1") %>% 
+  split(.$ASZ) %>% 
+  purrr::map_df(~mean(.$age_years, na.rm = TRUE))
+
+#check difference in age
+av <- aov(df_wide_survey_asz$age_years ~ df_wide_survey_asz$time * df_wide_survey_asz$ASZ)
+
+#check model specifications: ok
+ggfortify::autoplot(av)
+
+#compare time stamps
+TukeyHSD(av)
+  
+#share gender per canteen
+df_wide_survey_asz %>% 
+  filter(time == "T0") %>% 
+  mutate(gender = str_replace(.$gender, "keine Angaben", "keine Angabe")) %>% 
+  group_by(ASZ, gender) %>% 
+  summarise(tot = n()) %>% 
+  mutate(pct = tot / sum(tot) *100)
+
+
+#share gender per canteen
+df_wide_survey_asz %>% 
+  filter(time == "T1") %>% 
+  mutate(gender = str_replace(.$gender, "keine Angaben", "keine Angabe")) %>% 
+  group_by(ASZ, gender) %>% 
+  summarise(tot = n()) %>% 
+  mutate(pct = tot / sum(tot) *100)
+
+
+#check difference in age
+df_w <- df_wide_survey_asz %>%  filter(str_detect(.$gender, "keine Angabe| keine Angaben", 
+                                       negate = TRUE))
+gmodels::CrossTable(interaction(df_w$time,df_w$ASZ), df_w$gender, chisq = TRUE)
+
+
+#prepare data
+df_wide_survey_asz %>% 
+  filter(duplicated(.$pre_post_test)) %>% 
+  group_by(pre_post_test, gender, age, ASZ) %>% 
+  summarise(tot_occ = n()) %>%
+  ungroup() %>% 
+  drop_na() %>% 
+  filter(tot_occ > 1) -> df_ # if you want to be correct => there are only 4 persons in both times
+
+#merge back information
+df_pre_post <- df_wide_survey_asz %>% 
+  right_join(., df_)
+  
+
+```
+
+
+# Ernährungsverhalten ASZ t0
+```{r nutrition pattern}
+# prepare data
+# https://stackoverflow.com/questions/10520772/in-r-how-to-get-an-objects-name-after-it-is-sent-to-a-function
+# https://stat.ethz.ch/R-manual/R-devel/library/base/html/toString.html
+
+
+# defining color palette
+pal <- c("Fleisch" = "#eeda51",
+         "vegetarisch" = "#c1cf3b",
+         "nicht beantwortet" = "#f9ecbc")
+
+# define arrangement of the fill value
+pattrn = c("vegetarisch", "Fleisch", "nicht beantwortet")
+
+
+#meal content 
+plot_item_single(df_long_survey_asz, question = "meal_content", tit_guide = "Essen Sie Fleisch oder ernähren\nSie sich vegetarisch?", wave = "both", save = TRUE, width = 16, height = 8)
+
+
+
+```
+
+
+# Zufriedenheit mit dem Menuangebot
+```{r satisfaction}
+# define color palette
+pal <- c("nicht zufrieden" = "#eeda51",
+          "zufrieden" = "#c1cf3b",
+          "nicht beantwortet" = "#f9ecbc")
+
+# define arrangement of the fill value
+pattrn = c("zufrieden", "nicht zufrieden", "nicht beantwortet")
+
+
+#plot  
+plot_item_single(df_long_survey_asz, question = "satisfaction", tit_guide = "Wie zufrieden sind Sie\nmit dem Menüangebot?", wave = "both", save = TRUE, width = 16, height = 8)
+
+
+```
+
+
+# Eigenschaften des Mittagessens
+```{r food features}
+
+# define colors
+pal = c("wichtig" = "#c1cf3b", 
+        "nicht wichtig" = "#eeda51",
+        "nicht beantwortet" = "#f9ecbc")
+
+# define order
+pattrn = c("wichtig", "nicht wichtig", "nicht beantwortet")
+
+#dims
+wd = 18.5; hg = 11
+
+#plot over all canteens t0 and t1
+plot_item_block_all_asz(df_long_survey_asz, question = c("att_1|att_2|att_3|att_4|att_5"),  
+                save = TRUE, width = 19, height = 11)
+
+
+## plot single canteen
+# plot AZ1
+plot_item_block_two_asz(df_long_survey_asz, question = c("att_1|att_2|att_3|att_4|att_5"), asz = "AZ1",  
+                save = TRUE, width = wd, height = hg)
+
+#AZ2
+plot_item_block_two_asz(df_long_survey_asz, question = c("att_1|att_2|att_3|att_4|att_5"), asz = "AZ2",  
+                save = TRUE, width = wd, height = hg)
+
+#AZ3
+plot_item_block_two_asz(df_long_survey_asz, question = c("att_1|att_2|att_3|att_4|att_5"), asz = "AZ3",  
+                save = TRUE, width = wd, height = hg)
+
+#AZ4
+plot_item_block_two_asz(df_long_survey_asz, question = c("att_1|att_2|att_3|att_4|att_5"), asz = "AZ4",  
+                save = TRUE, width = wd, height = hg)
+
+
+```
+
+
+# Fragen zum Wissen
+```{r knowledge items}
+# define colors
+pal = c("richtig" = "#c1cf3b" ,
+        "falsch" = "#eeda51",
+        "weiss nicht" = "#fcf18e",
+        "nicht beantwortet" = "#f9ecbc")
+
+
+# define order
+pattrn = c("richtig", "falsch", "weiss nicht", "nicht beantwortet")
+
+
+#plot over all canteens t0 and t1
+#dims
+wd = 19; hg = 11
+
+
+#plot overall
+plot_item_block_all_asz(df_long_survey_asz,
+                question = "know_1|know_2|know_3|know_4|know_5", 
+                save = TRUE,
+                width = wd,
+                height = 11)
+
+
+# AZ1 (K)
+plot_item_block_two_asz(df_long_survey_asz, 
+                question = "know_1|know_2|know_3|know_4|know_5", 
+                asz = "AZ1", 
+                save = TRUE,
+                width = wd,
+                height = hg)
+
+
+
+# AZ2
+plot_item_block_two_asz(df_long_survey_asz, 
+                question = "know_1|know_2|know_3|know_4|know_5", 
+                asz = "AZ2", 
+                save = TRUE,
+                width = wd,
+                height = hg)
+
+
+
+# AZ3
+plot_item_block_two_asz(df_long_survey_asz, 
+                question = "know_1|know_2|know_3|know_4|know_5", 
+                asz = "AZ3", 
+                save = TRUE,
+                width = wd,
+                height = hg)
+
+
+
+# AZ4
+plot_item_block_two_asz(df_long_survey_asz, 
+                question = "know_1|know_2|know_3|know_4|know_5", 
+                asz = "AZ4", 
+                save = TRUE,
+                width = wd,
+                height = hg)
+
+
+
+```
+
+```{r test knowledge}
+#are there differences between canteens according the knowledge?
+dt <- df_long_survey_asz %>%
+  filter(stringr::str_detect(questions, pattern = "know_1|know_2|know_3|know_4|know_5")) %>%  
+  drop_na()
+
+#test if mean is close to zero
+# aggregate(tot ~ answer + questions + ASZ, data = dt, FUN = mean)
+
+#test per question i quess: other tests do not make sense in my eyes
+dt %>% 
+  split(.$questions) %>% 
+  purrr::map(~fisher.test(.$ASZ, .$answer, simulate.p.value = TRUE, B = 100000))  #2, 3, 5 seems having differences
+  
+
+#cramers v
+dt %>% 
+  split(.$questions) %>% 
+  purrr::map(~DescTools::CramerV(.$ASZ, .$answer, method = "fisher"))
+
+#crosstabs
+dt %>% 
+  split(.$questions) %>% 
+  purrr::map(~gmodels::CrossTable(.$ASZ, .$answer, chisq = TRUE, fisher = TRUE))
+
+
+df_av <- df_long_survey_asz %>% filter(questions == "know_2") %>% drop_na()
+fisher.test(df_av$ASZ, df_av$answer, simulate.p.value = TRUE)
+
+
+
+#plot to see better
+df <- df_long_survey_asz %>% 
+  filter(questions == "know_3") %>% 
+  drop_na() %>% 
+  group_by(ASZ, answer) %>% 
+  summarise(tot = n()) %>% 
+  mutate(pct = tot / sum(tot))
+
+ggplot(df, aes(y = pct, x = ASZ, fill = answer)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = scales::percent(pct, accuracy = 2)), position = position_stack(vjust = .5)) 
+  
+
+```
+
+
+# Frage zum Wissen (Bild)
+```{r knowledge pictures}
+
+#define colors
+pal = c("Schweineschnitzel/Rindshamburger" =  "#eeda51",
+        "Tofuschnitzel/Tofuhamburger" = "#c1cf3b" ,
+        "Sellerieschnitzel/Gemüsehamburger" = "#fcf18e",
+        "nicht beantwortet" = "#f9ecbc")
+
+
+d <- df_long_survey_asz %>% 
+  filter(questions == "know_6") %>% 
+  mutate(answer = if_else(answer != "nicht beantwortet", stringr::str_to_title(answer), answer),
+         answer = case_when(answer == "Sellerieschnitzel" ~ "Sellerieschnitzel/Gemüsehamburger",
+                             answer == "Gemüsehamburger" ~ "Sellerieschnitzel/Gemüsehamburger",
+                             answer == "Tofuschnitzel" ~ "Tofuschnitzel/Tofuhamburger",
+                             answer == "Tofuhamburger" ~ "Tofuschnitzel/Tofuhamburger",
+                             answer == "Schweineschnitzel" ~ "Schweineschnitzel/Rindshamburger",
+                             answer == "Rindhamburger" ~ "Schweineschnitzel/Rindshamburger",
+                             TRUE ~ answer)) %>%  #pair two factorlevels => fct_c (however not with long format)  
+  group_by(ASZ, time, answer) %>% 
+  summarise(tot = n()) %>% 
+  mutate(pct = tot / sum(tot)) %>%
+  ungroup() %>% 
+  #change na's to keine angaben
+  mutate(answer = if_else(is.na(.$answer), "nicht beantwortet", .$answer)) %>% 
+  # change names of ASZ for plot
+  mutate(ASZ = case_when(ASZ == "AZ1" ~ "AZ1 (K)",
+                         TRUE ~ ASZ))  
+  
+    
+# add text for xlab
+df_t <- d %>% 
+   group_by(ASZ, time) %>% 
+   summarise(tot_asz = sum(tot)) %>% 
+   mutate(xlab_ = paste0("(n = ", tot_asz, ")"),
+             xlab = paste(time, xlab_, sep = "\n")) %>% 
+             # xlab = paste(if_else(time == "T0", "erste Befragung", "zweite Befragung"), xlab_, sep = "\n")) %>%  
+    left_join(., d, by = c("ASZ", "time"))
+    
+    
+p <- ggplot(df_t, aes(x = xlab, y = pct, fill = forcats::fct_rev(factor(answer)))) +
+      geom_bar(stat = "identity", position = position_stack(reverse = T), width = .6) +
+      scale_fill_manual(values = pal) + 
+      scale_y_origin(labels = scales::percent) +
+      guides(fill = guide_legend(str_wrap("Was denken Sie, welches Menü belastet die Umwelt am wenigsten?", 40), reverse = T)) +
+      geom_text(aes(label = scales::percent(pct, accuracy = 1)), 
+                position = position_stack(reverse = T, vjust = .5), size = 22*converter,
+                family = theme_get()$text$family) +
+      labs(y = "Antworten in Prozent", x = "") +
+      facet_grid(. ~ ASZ, scales = "free") +
+      mytheme 
+
+ggsave(filename = paste0(survey_plot_asz, "knowledge_pics_both_", 
+                  format(Sys.Date(), "%Y_%m_%d"), ".pdf"),
+           plot = p,
+           width = 18,
+           height = 8,
+           device = cairo_pdf)
+
+
+ggsave(filename = paste0(survey_plot_asz, "knowledge_pics_both_", 
+                  format(Sys.Date(), "%Y_%m_%d"), ".png"),
+           plot = p,
+           width = 18,
+           height = 8,
+           device = "png")
+
+
+```
+
+
+#Information uber Intervention
+```{r information about the intervention}
+
+# define colors
+pal = c("Stimme zu" = "#c1cf3b" ,
+        "Stimme nicht zu" = "#eeda51",
+        "nicht beantwortet" = "#f9ecbc")
+
+
+# define order
+pattrn = c("Stimme zu", "Stimme nicht zu", "nicht beantwortet")
+new_labels = c("stimme zu", "stimme nicht zu", "nicht beantwortet")
+
+#plot over all canteens t0 and t1
+# define width and height
+wd = 26
+hg = 12
+
+
+
+#plot t1 az2
+#attention set filters right otherwiese share of NA is huge!
+plot_item_block_one_asz(df_long_survey_asz, wave = "T1",
+                question = "inter_AZ2_1|inter_AZ2_2|inter_AZ2_3|inter_AZ2_4|inter_AZ2_5|inter_AZ2_6|inter_AZ2_7|inter_AZ2_8", 
+                asz = "AZ2",
+                wrap = NULL,
+                save = TRUE,
+                width = 17,
+                height = 10)
+
+#plot t1 AZ3
+pal2 = c("ja" = "#c1cf3b", "nein" = "#eeda51", "nicht beantwortet" = "#f9ecbc")
+
+pattrn2 = c("ja", "nein", "nicht beantwortet")
+
+# first item was different then the rest
+plot_item_treemap(df_long_survey_asz, wave = "T1", question = "inter_AZ3_1",
+                 asz = "AZ3",
+                 save = TRUE,
+                 width = 17,
+                 height = 8)
+
+# plot the rest of the items 
+plot_item_block_one_asz(df_long_survey_asz, wave = "T1",
+                question = ("inter_AZ3_3|inter_AZ3_4|inter_AZ3_5|inter_AZ3_6|inter_AZ3_7"),
+                asz = "AZ3",
+                save = TRUE,
+                wrap = NULL,
+                width = 17,
+                height = 7)
+
+# plot first item of AZ4, which is different
+plot_item_treemap(df_long_survey_asz, wave = "T1", question = "inter_AZ4_1",
+                 asz = "AZ4",
+                 save = TRUE,
+                 width = 14,
+                 height = 8)
+
+
+#plot t1 AZ4 the rest of the items
+plot_item_block_one_asz(df_long_survey_asz, wave = "T1",
+                question = ("inter_AZ4_2|inter_AZ4_3|inter_AZ4_4|inter_AZ4_5|inter_AZ4_6|inter_AZ4_7|inter_AZ4_8|inter_AZ4_9"),
+                asz = "AZ4",
+                save = TRUE,
+                wrap = NULL,
+                width = 17,
+                height = 10)
+
+
+```
+
+

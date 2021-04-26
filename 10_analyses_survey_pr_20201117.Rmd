@@ -1,0 +1,913 @@
+---
+title: "PR survey - analysis"
+author: "gian-andrea egeler, 2020"
+output: html_document
+---
+
+
+```{r setup, message=FALSE, echo = FALSE}
+
+knitr::opts_chunk$set(echo = F, message = F, fig.align = "center", 
+                      out.width = "80%")
+
+#libraries
+library(stringr)
+library(dplyr)
+library(magrittr)
+
+
+# load data
+source("R/07_load_survey_data_PR.R")
+
+
+# load functions
+source("R/07_function_plot_single_items_PR.R")
+source("R/07_function_plot_boolean_items_PR.R")
+source("R/07_function_plot_multiple_items_PR.R")
+
+#config
+source("R/config_path.R")
+source("R/config_plot.R")
+
+
+```
+
+
+```{r filled out survey}
+
+#missings, one question is missing completely for handy version
+df_survey_pr %>% 
+  filter(type == "mobile" & time == "T0" & is.na(answer)) %>% 
+  group_by(questions) %>% 
+  summarise(tot = n()) -> miss
+
+#how many per phone and pc => maybe also per canteen interesting?
+df_survey_pr %>% 
+  #filter only one person
+  mutate(type = str_replace(.$type, "[:digit:]", "")) %>% 
+  group_by(time, type) %>% 
+  summarise(tot = n()) %>% 
+  mutate(pct = tot / sum(tot)) 
+
+
+
+  
+
+```
+
+
+```{r overview canteens}
+#prepare data t0
+df <- df_survey_pr %>% 
+  #first wave and meal_description
+  filter(questions == "meal_description" | questions == "age_years") %>%
+  #one persons does not have specified the canteen 
+  drop_na(PR, answer) %>% 
+  #filter every person once
+  filter(!duplicated(.$date)) %>%
+  group_by(time, PR) %>% 
+  summarise(tot = n()) %>% 
+  mutate(pct = tot / sum(tot)) %>% 
+  ungroup() %>% 
+  mutate(PR = if_else(PR == "PR1", "PR1 (K)", PR))
+
+
+#overall
+df_t <- df %>% 
+  group_by(time) %>% 
+  summarise(tot_t = sum(tot)) %>% 
+  ungroup() %>% 
+  left_join(. , df, by = "time") %>% 
+  mutate(xlab_ = paste0("(n = ", tot_t, ")"),
+         xlab = paste(time, xlab_, sep = "\n"))
+  
+
+#plot
+pal = c("PR1 (K)" = "#aab92e",
+        "PR2" = "#cda824", 
+        "PR3" = "#fcf18e",
+        "PR4" = "#f9ecbc")
+
+
+p <- ggplot(df_t, aes(x = xlab, y = pct, fill = PR)) +
+  geom_bar(stat = "identity", position = position_stack(), width = .6) + 
+  scale_y_origin(labels = scales::percent_format(accuracy = 1)) +
+  geom_text(aes(label = tot), position = position_stack(vjust = .5), size = 22*converter, 
+            family = theme_get()$text$family) +
+  scale_fill_manual(values = pal) +
+  guides(fill = guide_legend(title = "Personalrestaurants")) +
+  labs(x = "", y = "Befragte Gäste in Prozent") +
+  mytheme
+  
+
+ggsave(filename = paste0(survey_plot_pr,"overview_fillings_PR.pdf"),
+         device = cairo_pdf,
+         height = 9,
+         width = 7,
+         plot = p)
+
+ggsave(filename = paste0(survey_plot_pr,"overview_fillings_PR.png"),
+         device = "png",
+         height = 9,
+         width = 7,
+         plot = p)
+
+
+```
+
+```{r meal choice t0 & t1}
+# define arrangement of the fill value, needs to be the same as in the dataset
+#attention order is reverse
+pal = c( "Menü 2 bzw. vegetarisches Menü" =  "#c1cf3b",
+           "Wochenhit / EWZ Hit" = "#fcf18e",
+           "Menü 1" =  "#eeda51",
+         "Etwas anderes" = "#f9ecbc")
+
+#defining color palette & if necesarry also new labels, takes however the order
+#defined above in pattrn
+new_lab <- c("Vegetarisch",
+             "Wochenhit (Fleisch)",
+             "Fleisch",
+             "Etwas anderes (z.B. Buffet, Salat)")
+
+
+#meal content T0
+plot_item_single_both_pr(df_survey_pr, "meal_description", tit_guide = "Was haben sie gegessen?", save = TRUE, width = 15,  height = 10)
+
+```
+
+
+```{r stats eat canteen}
+
+#visiting canteen per week t0 and t1
+df_survey_pr %>% 
+  filter(questions == "eat_canteen") %>% 
+  split(.$time) %>% 
+  purrr::map(~Hmisc::describe(.$answer, na.rm = TRUE))
+
+#t0: 20% once per week; 21% twice per week; 24% three times per week; 16% four time
+#21% five times per week
+
+#working quote
+df_survey_pr %>% 
+  filter(questions == "office") %>% 
+  split(.$time) %>% 
+  purrr::map(~Hmisc::describe(.$answer, na.rm = TRUE))
+
+#share home office
+df_survey_pr %>%
+  drop_na(PR) %>% 
+  filter(questions == "home_o") %>% 
+  group_split(.$PR, .$time) %>% 
+  purrr::map(~Hmisc::describe(.$answer, na.rm = TRUE))
+
+#t1: 19% once; 23 tweive; 23 twice per week, 22% four times; 13% five times
+
+####
+# eat canteen
+####
+df_eat <- df_survey_pr %>% 
+  filter(questions == "eat_canteen") %>%  #an one person said, he went 7 times eating at the canteen)
+  filter(answer != 7) #pr3 not open at wknd's
+
+#split the dataset: not a nice way (but fast)
+pal = c("1" = "#6d7426",
+        "2" = "#cda824", #c1cf3b
+        "3" = "#eeda51",
+        "4" = "#fcf18e",
+        "5" = "#f9ecbc")
+
+#plot both: add title
+plot_both_pr(df_eat, question = "eat_canteen", tit_guide = "Besuche\npro Woche", save = TRUE, height = 10, width = 16)
+
+
+
+```
+
+
+```{r information of meal offer}
+
+#prepare pattern to search
+pattrn <- paste0("meal_choice",seq(1, 9, 1), "$") %>% 
+  paste(., collapse = "|")
+
+
+#define colors
+pal = c("PR1 (K)" = "#aab92e",
+        "PR2" = "#cda824", 
+        "PR3" = "#fcf18e",
+        "PR4" = "#f9ecbc")
+
+#define some params
+ylabs = "Anzahl Nennungen (Mehrfachnennungen waren möglich)"
+n = 30 #wrap
+
+#plot 
+plot_item_boolean_pr(df_survey_pr, question = pattrn, save = TRUE,
+                       width = 18, height = 10, wrap = n,
+                       xlab = "", ylab = ylabs, subtitle = "Wo informieren Sie sich hauptsächlich über das Menüangebot?")
+
+
+
+```
+
+
+```{r info about meal choice}
+#prepare pattern to search
+pattrn <- paste0("choice_behavior", seq(1, 15, 1), "$") %>% 
+  paste(., collapse = "|")
+
+#define some params
+labs = "Ich habe heute das Menü gewählt, weil"
+ylabs = "Anzahl Nennungen (maximal 3 Gründe)"
+
+#plot
+plot_item_boolean_pr(df_survey_pr, question = pattrn, save = TRUE,
+                       width = 24, height = 18, wrap = 50,
+                       xlab = "", ylab = ylabs, subtitle = labs) 
+
+```
+
+```{r info about attitude of the food}
+# attention there are some missings in wave t0, due to technical issues in handy version (total 287 persoms over both waves) => 
+item_list <- paste0("choice_attitude", seq(1, 12, 1), "$") 
+
+#define colors
+pal = c("1" = "#fcf18e",
+        "2" = "#f6d516",
+        "3" = "#d6da4f",
+        "4" = "#aab92e",
+        "5" =  "#579031")
+
+#attention order need be reversed
+lab = c("Stimme überhaupt\nnicht zu",
+        "Stimme eher\nnicht zu",
+        "teils-teils",
+        "Stimme eher\nzu",
+        "Stimme voll\nund ganz zu")
+
+#plot per item
+for(item in item_list){
+  plot_item_block_both_pr(df_survey_pr, item = item, wrap = 90, save = TRUE,
+                       width = 21, height = 10,                        title = "Mir ist wichtig, dass mein Mittags-Menü")
+}
+
+
+```
+
+```{r meal offer of canteens in ZH}
+#prepare pattern to search
+item_list <- paste0("meal_offer_city", seq(1, 4, 1), "$")
+
+#plot both 
+for(item in item_list){
+  plot_item_block_both_pr(df_survey_pr, item = item, wrap = 110, save = TRUE,
+                       width = 24, height = 12,                        title = "In städtischen Verpflegungsbetrieben")
+}
+
+
+```
+
+```{r infos about food believes}
+#prepare pattern to search
+item_list <- paste0("food_feature", seq(1, 8, 1), "$") 
+
+#plot t0
+for(item in item_list){
+  plot_item_block_both_pr(df_survey_pr, item = item, wrap = 90, save = TRUE,
+                       width = 24, height = 12,                        title = "")
+}
+
+
+```
+
+```{r infos about environmental believes}
+#prepare data, collapse six factors to four
+df_envir <- df_survey_pr %>% 
+  filter(questions == "envir_feature")  %>% 
+  #rename answers for collaps
+  mutate(answer = case_when(answer == "1" ~ "Predecision",
+                          answer == "2" ~ "Predecision",
+                          answer == "3" ~ "Preaction",
+                          answer == "4" ~ "Action",
+                          answer == "5" ~ "Postaction",
+                          answer == "6" ~ "Postaction")) %>% 
+  drop_na(answer)
+
+
+#define colors per factor
+pal = c("Postaction" = "#6d7426", 
+        "Action" = "#d6da4f",  
+        "Preaction" = "#f6d516",
+        "Predecision" = "#fcf18e"
+        )
+
+
+#do some breaks by hand
+pattrn = attributes(factor(pal))$names
+
+
+#plot t0
+plot_both_pr(df_envir, question = "envir_feature", tit_guide = "Phasen der\nVerhaltensänderung", save = TRUE, height = 12, width = 18)
+
+
+```
+
+```{r money sensitivity}
+#filter items
+pattrn <- paste0("money_attitude", seq(1, 4, 1), "$") %>% 
+  paste(., collapse = "|")
+
+#stats
+df_survey_pr %>% 
+  filter(str_detect(.$questions, pattern = pattrn)) %>% 
+  mutate(answer = as.numeric(answer)) %>% 
+  drop_na(answer) -> df_t # %>%
+  # filter(duplicated(ID, ))
+  # group_by(questions) %>%
+  # summarise(mean_ = mean(answer, na.rm = TRUE),
+  #           sd_ = sd(answer, na.rm = TRUE),
+  #           se_ = sd(answer, na.rm = TRUE) / sqrt(length(answer)),
+  #           tot = length(answer))
+
+
+#cheack diff in means
+av1 <- aov((answer) ~ questions * time, data = df_t) # only 50% R2
+t.test(answer ~ time, data = df_t)
+
+
+library(ggfortify)
+autoplot(av1) #the normal distribution is not the best, there are some observations which we need to interpret with caution
+summary.lm(av1) # time as sign. differences; however t.test(df_t$answer ~ df_t$time) is not
+
+
+
+#plot
+df_survey_pr %>% 
+  # filter()#personen die doppelt sind raus
+  filter(str_detect(.$questions, pattern = pattrn)) %>% 
+  drop_na(answer) %>%
+  # mutate(answer = round(as.numeric(answer)), 1) %>% 
+  # group_by(questions, answer) %>% 
+  # summarise(tot = n()) %>% 
+  # mutate(pct = tot / sum(tot),
+  #        cumpct = cumsum(pct)) %>% 
+  # ungroup() %>% 
+  # drop_na(answer) %>% 
+  mutate(questions = case_when(questions == "money_attitude1" ~ "zu teuer",
+                               questions == "money_attitude2" ~ "teuer",
+                               questions == "money_attitude3" ~ "zu günstig",
+                               questions == "money_attitude4" ~ "günstig")) %>% 
+  # split(.$questions) %>% 
+  select(ID, questions, answer, time) %>% 
+  pivot_wider(., id_cols = c("ID", "time"), names_from = "questions", values_from = "answer") %>% 
+  janitor::clean_names() %>% 
+  drop_na() %>%  #only complete cases (-7)
+  mutate(zu_teuer = as.numeric(zu_teuer),
+         teuer = as.numeric(teuer),
+         gunstig = as.numeric(gunstig),
+         zu_gunstig = as.numeric(zu_gunstig)) -> df
+
+
+
+# dataset: for further infos, https://github.com/max-alletsee/pricesensitivitymeter/blob/master/R/psm_functions.R
+data_ecdf <- data.frame(price = sort(unique(c(df$zu_gunstig, df$gunstig, df$teuer, df$zu_teuer))))
+
+
+
+#too cheap: cumulative density after reversing
+ecdf_psm <- ecdf(df$zu_gunstig)
+data_ecdf$ecdf_toocheap <- 1 - ecdf_psm(data_ecdf$price)
+
+#cheap: also reversed
+ecdf_psm <- ecdf(df$gunstig)
+data_ecdf$ecdf_cheap <- 1 - ecdf_psm(data_ecdf$price)
+
+#expensive
+ecdf_psm <- ecdf(df$teuer)
+data_ecdf$ecdf_expensive <- ecdf_psm(data_ecdf$price)
+
+ 
+#tooexpensive
+ecdf_psm <- ecdf(df$zu_teuer)
+data_ecdf$ecdf_tooexpensive <- ecdf_psm(data_ecdf$price)
+
+
+# "not cheap" and "not expensive" for identifying the acceptable price range
+data_ecdf$ecdf_not_cheap <- 1 - data_ecdf$ecdf_cheap
+data_ecdf$ecdf_not_expensive <- 1 - data_ecdf$ecdf_expensive
+
+
+#helper function
+identify_intersection <- function(data, var1, var2, method) {
+  first_intersection_pos <- which(data[, var1] >= data[, var2])[1]
+
+  if (is.na(first_intersection_pos)) { # if no intersection: return NA
+    return(NA)
+  } else { # otherwise, run the actual function
+    all_intersections_pos <- which(data[, var1] == data[first_intersection_pos, var1] &
+      data[, var2] == data[first_intersection_pos, var2])
+
+    all_intersections_prices <- data[all_intersections_pos, "price"]
+
+    switch(method,
+      min = {min(all_intersections_prices)},
+      max = {max(all_intersections_prices)},
+      mean = {mean(all_intersections_prices)},
+      median = {median(all_intersections_prices)}
+    )
+  }
+}
+
+
+# indifference price point IDP: intersection of "expensive" and "cheap"
+# interpretation: a) median price paid by consumer or b) price of the product of an important market leader
+idp <- identify_intersection(
+    data = data_ecdf,
+    var1 = "ecdf_expensive",
+    var2 = "ecdf_cheap",
+    method = "min"
+  )
+
+# optimal price point OPP: intersection of "too expensive" and "too cheap"
+# interpretation: resistance against the price of a product is very low
+opp <- identify_intersection(
+    data = data_ecdf,
+    var1 = "ecdf_tooexpensive",
+    var2 = "ecdf_toocheap",
+    method = "min"
+)
+
+
+
+#line color
+line_type = c("zu günstig" = "dotted",
+            "günstig" = "solid",
+              "teuer" = "solid",
+              "zu teuer" = "dotted") 
+
+#define some params
+pal_line = c("zu günstig" = "#579031",
+        "günstig" = "#d6da4f",
+        "teuer" = "#f6d516",
+        "zu teuer" = "#cda824")
+
+ggplot(data_ecdf, aes(x = price)) + 
+  geom_line(aes(y = .data$ecdf_toocheap,
+      colour = "zu günstig",
+      linetype = "zu günstig"),
+      size = 1.3) +
+  geom_line(aes(
+      y = .data$ecdf_tooexpensive,
+      colour = "zu teuer",
+      linetype = "zu teuer"
+    ),
+      size = 1.3) +
+  ggplot2::geom_line(ggplot2::aes(
+      y = .data$ecdf_not_cheap,
+      colour = "günstig",
+      linetype = "günstig"
+    ),
+    size = 1.3) +
+  geom_line(aes(
+      y = .data$ecdf_not_expensive,
+      colour = "teuer",
+      linetype = "teuer"
+    ),
+    size = 1.3) +
+  ggplot2::annotate(
+      geom = "label",
+      x = idp,
+      y = .85,
+      label = paste("IDP: ", idp),
+      fill = "white",
+      alpha = 0.5
+    ) +
+  ggplot2::annotate(
+      geom = "label",
+      x = opp,
+      y = .15,
+      label = paste("OPP: ", opp),
+      fill = "white",
+      alpha = 0.5
+    ) +
+  
+  scale_y_origin(labels = scales::percent_format(accuracy = 1)) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0)), breaks = seq(0, 50, 5)) +
+  scale_color_manual(name = "Legend", values = pal_line) +
+  scale_linetype_manual(name = "Legend", values = line_type) +
+  guides(color = guide_legend(title = "", keywidth = 1), linetype = guide_legend(title = "")) +
+  labs(x = "Preis in CHF", y = "Kumulierte Häufigkeit") +
+  mytheme
+
+ggsave(paste0(survey_plot_pr, "van_westendorp_20210205.pdf"),
+       height = 8,
+       width = 14,
+       device = cairo_pdf)
+
+ggsave(paste0(survey_plot_pr, "van_westendorp_20210205.png"),
+       height = 8,
+       width = 14,
+       device = "png")
+
+
+```
+
+```{r diet type, diet pattern}
+
+#define colors and pattern
+pal = c("vegan (Ich esse ausschliesslich pflanzliche Lebensmittel wie Getreide, Gemüse, Obst, Hülsenfrüchte, Nüsse und Samen)." = "#579031",
+           "ovo-lakto-vegetarisch (Ich esse pflanzliche Lebensmittel, ohne Fleisch, ohne Fisch/Meeresfrüchte, aber mit tierischen Produkten wie Milch/-produkten und Eiern)." = "#aab92e",
+           "flexitarisch (Ich esse vorwiegend vegetarisch, tierische Produkte wie Eier, Käse sowie Fleisch & Fisch werden ab und zu, aber nicht regelmäßig verzehrt)." = "#d6da4f", # attention the doppelt ss
+           "alles, d.h. Fleisch als auch pflanzliche Lebensmittel und folge damit keinem bestimmten Nahrungsspektrum." = "#f6d516",
+           "anders:" = "#fcf18e")
+
+new_lab = c("vegan.",
+        "ovo-lakto-vegetarisch.",
+        "flexitarisch.",
+        "alles.",
+        "anders.")
+
+#plot both: add title
+plot_item_single_both_pr(df_survey_pr, question = "diet_type", tit_guide = "Ich esse", save = TRUE, height = 10, width = 16)
+
+#andere Verpflegungstypen, 13 => check out wide format
+df_survey_pr %>% 
+  filter(questions == "diet_type" & answer == 5) %>% 
+  distinct()
+
+```
+
+```{r change behaviro over time}
+#better to split into groups => no change, better & worse
+df_survey_pr %>% 
+  filter(questions == "change_time_behavior") %>% 
+  mutate(change = case_when(answer == 5~ "no change",
+                            answer <= 4~ "more meat",
+                            answer >= 6~ "more vegi")) %>% 
+  group_by(change) %>% 
+  summarise(tot_ = n()) %>% 
+  mutate(pct = tot_ / sum(tot_)) -> df # 3 percent NA
+
+```
+
+
+```{r follow up}
+
+pattrn_1 <- df_w1_wide %>% 
+  select(ID, PR, follow_up, time, age_years) %>% 
+  drop_na(follow_up)
+
+pattrn_2 <- df_w2_wide %>% 
+  select(ID, PR, follow_up, time, age_years) %>% 
+  drop_na(follow_up) #counting by hand were 21 cases => possible that the filter function cancelled two out
+
+#returns 14 matches
+pattrn_2[pattrn_2$follow_up %in% pattrn_1$follow_up,] -> df_follow2
+
+#returns only 14 matches
+bind_rows(pattrn_1, pattrn_2)  %>% 
+  group_by(PR, follow_up, age_years) %>% 
+  summarise(tot = n()) %>% 
+  filter(tot > 1) -> df_follow
+
+#summarize
+table(df_follow$PR) #only one in PR4....
+
+
+```
+
+```{r last comments}
+df_survey_pr %>% 
+  filter(questions == "last_comments") %>% 
+  distinct(answer) %>% 
+  drop_na() %>% 
+  write_delim(here::here("augmented data/open_comments_PR_20201202.csv"), delim = ";")
+
+
+```
+
+```{r infos about prefill}
+#this number should not exceed the follow-up amount
+df_survey_pr %>% 
+  filter(questions == "pre_fill") %>% 
+  group_by(answer) %>% 
+  summarise(tot_ = n()) # as above 19 persons
+
+```
+
+```{r did they register any change}
+
+df_survey_pr %>% 
+  filter(questions == "change_note") %>% 
+  group_by(answer) %>% 
+  summarise(tot_ = n()) %>% 
+  mutate(pct = tot_ / sum(tot_)) %>%  # 40 percent yes, 40 no 25 dont know
+  capture.output(., file = here::here("augmented data", "change_intervention_noticed_PR.csv"))
+  
+df_survey_pr %>% 
+  filter(questions == "change_see") %>% 
+  drop_na(answer) %>% 
+  group_by(PR, answer) %>% 
+  summarise(tot_ = n()) %>% 
+  mutate(pct = tot_ / sum(tot_)) %>%  # 7% stempelkarte (1), 69% menüplan (1), 24% ubp (3)
+  capture.output(., file = here::here("augmented data", "intervention_see_PR.csv"))
+
+```
+
+```{r questions about the change in menüplan}
+# only 23 persons in total
+
+#prepare pattern to search
+pattrn <- paste0("inter_change", seq(1, 5, 1), "$") %>% 
+  paste(., collapse = "|")
+
+#define colors
+pal = c("1" = "#fcf18e",
+        "2" = "#f6d516",
+        "3" = "#d6da4f",
+        "4" = "#aab92e",
+        "5" =  "#579031")
+
+#attention order need be reversed
+lab = c("Stimme überhaupt\nnicht zu",
+        "Stimme eher\nnicht zu",
+        "teils-teils",
+        "Stimme eher\nzu",
+        "Stimme voll\nund ganz zu")
+
+plot_item_t1_pr(df_survey_pr, question = pattrn, pr = "PR2", save = TRUE,
+                       width = 22, height = 7, wrap = 50,
+                       ylab = "", title = "Sie haben angegeben, dass Sie Veränderungen im Menüplan bemerkt haben ")
+
+#one entry
+df_survey_pr %>% 
+  filter(questions == "inter_change6") %>% 
+  distinct(answer)
+
+```
+
+```{r questions about the UBP}
+# only 13 persons in total
+df_survey_pr %>% 
+  filter(questions == "inter_ubp1") %>% 
+  drop_na(answer) %>% 
+  group_by(answer) %>% 
+  summarise(tot_ = n()) %>% 
+  mutate(pct = tot_ / sum(tot_)) # 92% were correct
+
+#two entries, thats weird
+df_survey_pr %>% 
+  filter(questions == "inter_ubp7") %>% 
+  distinct(answer)
+
+#prepare pattern to search
+pattrn <- paste0("inter_ubp", seq(2, 6, 1), "$") %>% 
+  paste(., collapse = "|")
+
+#define colors
+pal = c("1" = "#fcf18e",
+        "2" = "#f6d516",
+        "3" = "#d6da4f",
+        "4" = "#aab92e",
+        "5" =  "#579031")
+
+#attention order need be reversed
+lab = c("Stimme überhaupt\nnicht zu",
+        "Stimme eher\nnicht zu",
+        "teils-teils",
+        "Stimme eher\nzu",
+        "Stimme voll\nund ganz zu")
+
+#plot: there are only 4 entries (there was single choice)
+plot_item_t1_pr(df_survey_pr, question = pattrn, pr = "PR3", save = TRUE,
+                       width = 23, height = 7, wrap = 55,
+                       ylab = "", title = "Sie haben angegeben, dass Sie bemerkt haben, dass die Menüs im Menüplan farblich gekennzeichnet waren ")
+
+
+```
+
+
+
+```{r change over the last 6 weeks}
+# anwers of 135 persons
+df_survey_pr %>% 
+  filter(questions == "change_time_behavior") %>% 
+  drop_na(answer) -> df_change
+
+range(df_change$answer); unique(df_change$answer)
+
+df_change %>% 
+  group_by(answer) %>% 
+  summarise(tot_ = n()) %>% 
+  mutate(pct = tot_ / sum(tot_),
+         tot_t <- sum(tot_)) %>% 
+  ungroup() %>% 
+  capture.output(., file = here::here("augmented data", "change_time_bevahiour_share_t1_PR.csv"))
+  # 31% did not change their diets over the last 4 weeks;
+  # 30% did say they ate more vegi during the last 4 weeks
+  # 18% say the ate more meat during the last 4 weeks
+
+```
+
+
+```{r meal_description, gender & time}
+#prepare data
+df_survey_pr %>% 
+  filter(str_detect(questions, pattern = "gender|meal_description")) %>% 
+  pivot_wider(., id_cols = c("ID", "time", "PR"), names_from = "questions", values_from = "answer") %>% 
+  group_by(PR, time, gender, meal_description) %>% 
+  summarise(answer = n()) %>% 
+  mutate(pct = answer / sum(answer)) %>% 
+  ungroup() %>% 
+  mutate(gender = case_when(gender == 1 ~ "Frau",
+                            gender == 2 ~ "Mann")) -> df_meal
+
+#get stats overall
+df_p <-  df_meal %>% 
+  group_by(PR, time, gender) %>% 
+  summarise(tot = sum(answer)) %>% 
+  ungroup() %>% 
+  mutate(tot = paste0("n = ", tot),
+         xlab = paste0(gender, " (",tot,")")) %>%  
+         # xlab = paste(xlab_, tot, sep = "\n")) %>% 
+  left_join(df_meal,. , by = c("PR", "time", "gender")) %>% 
+  mutate(meal_description = case_when(meal_description == 1 ~ "Fleisch",
+                                      meal_description == 2 ~ "Vegetarisch", 
+                                      meal_description == 3  ~ "Wochenhit (fleischhaltig)",
+                                      meal_description == 4 ~ "Etwas anderes"))
+
+#define pal
+pal = c("Vegetarisch" =  "#c1cf3b",
+           "Wochenhit (fleischhaltig)" = "#fcf18e",
+           "Fleisch" =  "#eeda51",
+         "Etwas anderes" = "#f9ecbc")
+
+#forcats::fct_rev(forcats::lvls_reorder(factor(xlab), idx = c(4, 5, 9, 13, 2, 6, 11, 16, 3, 7, 12, 14, 1, 8, 10, 15)))
+
+p <- ggplot(df_p, aes(x = forcats::fct_rev(factor(xlab)), y = pct, fill = factor(meal_description, levels = c("Vegetarisch", "Fleisch", "Wochenhit (fleischhaltig)", "Etwas anderes")))) +
+  geom_bar(stat = "identity", position = position_stack(reverse = TRUE)) +
+  geom_text(aes(label = scales::percent(pct, accuracy = 1)), position = position_stack(vjust = .5, reverse = TRUE), 
+            size = 22*converter) + 
+  scale_fill_manual(values = pal) +
+  scale_y_origin(labels = scales::percent) +
+  coord_flip() +  
+  facet_wrap(~ PR + time,  scales = "free_y", ncol = 1, strip.position = "left", drop = TRUE) +
+  guides(fill = guide_legend(title = "")) +
+  ggplot2::labs(y = "", x = "", subtitle = "") +
+  mytheme_facet +
+  theme(legend.position = "bottom")
+
+
+ggsave(filename = paste0(survey_plot_pr, "meal_choice_gender_time_PR_20210316.pdf"),
+         plot = p,
+         width = 26,
+         height = 16,
+         device = cairo_pdf)
+  
+ggsave(filename = paste0(survey_plot_pr,"meal_choice_gender_time_PR_20210316.png"),
+         plot = p,
+         width = 26,
+         height = 16,
+         device = "png")
+  
+
+  
+```
+
+```{r diet_type, gender, time}
+
+#prepare data
+df_survey_pr %>% 
+  filter(str_detect(questions, pattern = "gender|diet_type")) %>% 
+  pivot_wider(., id_cols = c("ID", "time", "PR"), names_from = "questions", values_from = "answer") %>% 
+  group_by(PR, time, gender, diet_type) %>% 
+  summarise(answer = n()) %>% 
+  mutate(pct = answer / sum(answer)) %>% 
+  ungroup() %>% 
+  mutate(gender = case_when(gender == 1 ~ "Frau",
+                            gender == 2 ~ "Mann")) -> df_diet
+
+#get stats overall
+df_p <-  df_diet %>% 
+  group_by(PR, time, gender) %>% 
+  summarise(tot = sum(answer)) %>% 
+  ungroup() %>% 
+  mutate(tot = paste0("n = ", tot),
+         xlab = paste0(gender, " (",tot,")")) %>%  
+         # xlab = paste(xlab_, tot, sep = "\n")) %>% 
+  left_join(df_diet,. , by = c("PR", "time", "gender")) %>% 
+  mutate(diet_type = case_when(diet_type == 1 ~ "ovo-lakto-vegetarisch.",
+                               diet_type == 2 ~ "flexitarisch.", 
+                               diet_type == 3  ~ "vegan.",
+                               diet_type == 4 ~ "alles.",
+                               diet_type == 5 ~ "anders.",
+                               TRUE ~ "nicht beantwortet"
+                               ))
+
+
+#define pal
+pal = c("vegan." = "#579031",
+           "ovo-lakto-vegetarisch." = "#aab92e",
+           "flexitarisch." = "#d6da4f",
+           "alles." = "#f6d516",
+           "anders." = "#fcf18e",
+        "nicht beantwortet" = "#f9ecbc")
+
+#forcats::fct_rev(forcats::lvls_reorder(factor(xlab), idx = c(4, 5, 9, 13, 2, 6, 11, 16, 3, 7, 12, 14, 1, 8, 10, 15)))
+
+p <- ggplot(df_p, aes(x = forcats::fct_rev(factor(xlab)), y = pct, fill = factor(diet_type, levels = c("vegan.", "ovo-lakto-vegetarisch.", "flexitarisch.", "alles.", "anders.", "nicht beantwortet")))) +
+  geom_bar(stat = "identity", position = position_stack(reverse = TRUE)) +
+  geom_text(aes(label = if_else(pct > .02, scales::percent(pct, accuracy = 1), "")), position = position_stack(vjust = .5, reverse = TRUE), 
+            size = 22*converter) + 
+  scale_fill_manual(values = pal) +
+  scale_y_origin(labels = scales::percent) +
+  coord_flip() +  
+  facet_wrap(~ PR + time,  scales = "free_y", ncol = 1, strip.position = "left", drop = TRUE) +
+  guides(fill = guide_legend(title = "Ich esse", nrow = 1)) +
+  ggplot2::labs(y = "", x = "", subtitle = "") +
+  mytheme_facet +
+  theme(legend.position = "bottom")
+
+
+ggsave(filename = paste0(survey_plot_pr, "diet_type_gender_time_PR_20210316.pdf"),
+         plot = p,
+         width = 18,
+         height = 12,
+         device = cairo_pdf)
+  
+ggsave(filename = paste0(survey_plot_pr,"diet_type_gender_time_PR_20210316.png"),
+         plot = p,
+         width = 18,
+         height = 12,
+         device = "png")
+
+```
+
+
+
+```{r meal_description, age, time}
+#makes no sense, thus age_groups are too small
+
+#prepare data
+df_survey_pr %>% 
+  filter(str_detect(questions, pattern = "age_years|meal_description")) %>% 
+  pivot_wider(., id_cols = c("ID", "time", "PR"), names_from = "questions", values_from = "answer") %>% 
+  mutate(age_years = as.numeric(age_years)) %>% 
+  mutate(age_groups = cut(.$age_years, breaks = c(-Inf, 36, 50, Inf), labels = c("16- bis 36 J.", "37- bis 50 J.", "51- bis 66 J."))) %>% 
+  group_by(PR, time, age_groups, meal_description) %>% 
+  summarise(answer = n()) %>% 
+  mutate(pct = answer / sum(answer)) %>% 
+  ungroup() -> df_meal
+
+#get stats overall
+df_p <-  df_meal %>% 
+  group_by(PR, time, age_groups) %>% 
+  summarise(tot = sum(answer)) %>% 
+  ungroup() %>% 
+  mutate(tot = paste0(", n = ", tot),
+         xlab = paste0(age_groups, " (", time, tot,")")) %>%  
+         # xlab = paste(xlab_, tot, sep = "\n")) %>% 
+  left_join(df_meal,. , by = c("PR", "time", "age_groups")) %>% 
+  mutate(meal_description = case_when(meal_description == 1 ~ "Fleisch",
+                                      meal_description == 2 ~ "Vegetarisch", 
+                                      meal_description == 3  ~ "Wochenhit (fleischhaltig)",
+                                      meal_description == 4 ~ "Etwas anderes"))
+
+#define pal
+pal = c("Vegetarisch" =  "#c1cf3b",
+           "Wochenhit (fleischhaltig)" = "#fcf18e",
+           "Fleisch" =  "#eeda51",
+         "Etwas anderes" = "#f9ecbc")
+
+
+
+  
+p <- ggplot(df_p, aes(x = forcats::fct_rev(factor(xlab)), y = pct, fill = factor(meal_description, levels = c("Vegetarisch", "Fleisch", "Wochenhit (fleischhaltig)", "Etwas anderes")))) +
+  geom_bar(stat = "identity", position = position_stack(reverse = TRUE)) +
+  geom_text(aes(label = scales::percent(pct, accuracy = 1)), position = position_stack(vjust = .5, reverse = TRUE), 
+            size = 22*converter) + 
+  scale_fill_manual(values = pal) +
+  scale_y_origin(labels = scales::percent) +
+  coord_flip() +  
+  facet_wrap(~ PR + time,  scales = "free_y", ncol = 1, strip.position = "left", drop = TRUE) +
+  guides(fill = guide_legend(title = "")) +
+  ggplot2::labs(y = "", x = "", subtitle = "") +
+  mytheme_facet +
+  theme(legend.position = "bottom")
+
+
+ggsave(filename = paste0(survey_plot_pr,"meal_choice_age_time_PR_20210316.pdf"),
+         plot = p,
+         width = 26,
+         height = 16,
+         device = cairo_pdf)
+  
+ggsave(filename = paste0(survey_plot_pr,"meal_choice_age_time_PR_20210316.png"),
+         plot = p,
+         width = 26,
+         height = 16,
+         device = "png")  
+
+```
+

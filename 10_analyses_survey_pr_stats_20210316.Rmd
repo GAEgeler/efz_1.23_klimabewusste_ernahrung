@@ -1,0 +1,809 @@
+---
+title: "PR survey - stat. analysis"
+author: "gian-andrea egeler, 2021"
+output: html_document
+---
+
+
+```{r setup, message=FALSE, echo = FALSE}
+
+#load packages
+library(dplyr)
+library(stringr)
+
+# load data
+source("R/07_load_survey_data_PR.R")
+
+#config
+source("R/config_path.R")
+
+```
+
+
+```{r stats overall}
+
+
+mean(df_w1_wide$age_years, na.rm=TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "age_overall_t0_PR.csv"))
+mean(df_w2_wide$age_years, na.rm=TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "age_overall_t1_PR.csv"))
+
+Hmisc::describe(df_w1_wide$gender) %>% 
+  capture.output(., file = here::here("augmented data/stats", "gender_overall_t0_PR.csv"))
+Hmisc::describe(df_w2_wide$gender) %>% 
+  capture.output(., file = here::here("augmented data/stats", "gender_overall_t1_PR.csv"))
+
+
+mean(df_w1_wide$eat_canteen, na.rm=TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "eat_canteen_overall_t0_PR.csv"))
+mean(df_w2_wide$eat_canteen, na.rm=TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "eat_canteen_overall_t1_PR.csv"))
+
+df_survey_pr %>% 
+  filter(questions == "eat_canteen") %>% 
+  mutate(answer = as.numeric(answer)) %>%
+  group_by(PR) %>% 
+  summarize(mean_e = mean(answer, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "eat_canteen_overall_canteen_PR.csv"))
+
+```
+
+
+```{r stats wave 0: gender, age, diet_type, educ, employment, attitude, eat_canteen, envir_feature}
+
+
+
+#gender--------------
+df_w1_wide %>% 
+  split(.$PR) %>% 
+  purrr::map(~Hmisc::describe(.$gender, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "gender_share_t0_PR.csv")) #big difference in pr1: much more female than men
+
+gmodels::CrossTable(df_w1_wide$PR, df_w1_wide$gender, chisq = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "gender_diff_canteen_t0_PR.csv"))
+
+#age------------
+df_w1_wide %>% 
+  split(.$PR) %>% 
+  purrr::map(~psych::describe(.$age_years, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "age_mean_t0_PR.csv"))
+
+#normaleverteilung ok
+#boxplots ok
+TukeyHSD(aov(df_w1_wide$age_years ~ df_w1_wide$PR)) %>%  #unterschiede im pr1 und pr4 (jünger) im vgl. zu pr2 & pr3 (älter)
+  capture.output(., file = here::here("augmented data/stats", "age_diff_canteen_t0_PR.csv"))
+
+
+#diet type-------------no differences
+df_w1_wide %>% 
+  split(.$PR) %>% 
+  purrr::map(~Hmisc::describe(.$diet_type, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "diet_type_t0_PR.csv"))
+
+gmodels::CrossTable(df_w1_wide$PR, df_w1_wide$diet_type, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "diet_type_diff_canteen_t0_PR.csv"))
+
+fisher.test(df_w1_wide$PR, df_w1_wide$diet_type, simulate.p.value = TRUE, B = 100000)
+
+#educ--------------
+df_w1_wide %>% 
+  split(.$PR) %>% 
+  purrr::map(~psych::describe(.$educ, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "educ_mean_t0_PR.csv"))
+
+#normalverteilung nicht ok
+#boxplot p11 not ok => transformation no improvement
+TukeyHSD(aov(df_w1_wide$educ ~ df_w1_wide$PR)) %>%  #keine unterschiede
+  capture.output(., file = here::here("augmented data/stats", "educ_diff_canteen_t0_PR.csv"))
+
+#employment: home_office & days at office------------
+df_w1_wide %>% 
+  split(.$PR) %>% 
+  purrr::map(~psych::describe(.$office, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "office_mean_t0_PR.csv"))
+
+#normalverteilung nicht ok
+#boxplot not ok => transformation no improvement 
+TukeyHSD(aov(df_w1_wide$office ~ df_w1_wide$PR)) %>%  # pr4 deutlich weniger personen gaben an vor ort zu arbeiten (schnitt 3.2 tage)
+  capture.output(., file = here::here("augmented data/stats", "office_diff_canteen_t0_PR.csv"))
+
+df_w1_wide %>% 
+  split(.$PR) %>% 
+  purrr::map(~psych::describe(.$home_o, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "home_office_mean_t0_PR.csv"))
+
+#normalverteilung nicht ok
+#boxplot not ok => transformation no improvement 
+TukeyHSD(aov(df_w1_wide$office ~ df_w1_wide$PR)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "home_office_diff_canteen_t0_PR.csv"))
+
+
+
+#eat canteen----------
+df_w1_wide %>% 
+  filter(eat_canteen != 7) %>% 
+  split(.$PR) %>% 
+  purrr::map(~ psych::describe(.$eat_canteen, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "eat_canteen_mean_t0_PR.csv"))
+
+#boxplots not bad
+TukeyHSD(aov(df_w1_wide$eat_canteen ~ df_w1_wide$PR)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "eat_canteen_diff_canteen_t0_PR.csv"))
+
+
+
+#envir_feature--------
+df_w1_wide %>% 
+  split(.$PR) %>% 
+  purrr::map(~ psych::describe(.$envir_feature, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "envir_feature_mean_t0_PR.csv"))
+
+#boxplots not bad
+TukeyHSD(aov(df_w1_wide$eat_canteen ~ df_w1_wide$PR)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "envir_feature_diff_canteen_t0_PR.csv"))
+
+```
+
+
+```{r stats wave 1}
+
+# #prepare data
+# df_w2_wide_clean <- df_w2_wide %>%
+#   anti_join(., df_follow)
+
+#gender---------
+df_w2_wide %>%
+  split(.$PR) %>% 
+  purrr::map(~Hmisc::describe(.$gender, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "gender_share_t1_PR.csv"))
+
+df_w2_wide %>% 
+  do(gmodels::CrossTable(.$PR, .$gender, chisq = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "gender_diff_canteen_t1_PR.csv"))
+
+#age-----
+df_w2_wide %>% 
+  split(.$PR) %>% 
+  purrr::map(~psych::describe(.$age_years, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "age_mean_t1_PR.csv"))
+
+#boyplot ok
+TukeyHSD(aov(df_w2_wide$age_years ~ df_w2_wide$PR)) %>%  #no difference
+  capture.output(., file = here::here("augmented data/stats", "age_diff_canteen_t1_PR.csv"))
+
+#educ-------
+df_w2_wide %>%
+  split(.$PR) %>% 
+  purrr::map(~psych::describe(.$educ, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "educ_mean_t1_PR.csv"))
+
+#normalverteilung nicht ok
+#boxplot pr1 not ok, very probelmatic => transformation no improvement
+TukeyHSD(aov(df_w2_wide$educ ~ df_w2_wide$PR)) %>%  #pr1 vs pr2 => however caution! 
+  capture.output(., file = here::here("augmented data/stats", "educ_diff_canteen_t1_PR.csv"))
+
+#diet type-------------no differences
+df_w2_wide %>% 
+  split(.$PR) %>% 
+  purrr::map(~Hmisc::describe(.$diet_type, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "diet_type_t1_PR.csv"))
+
+gmodels::CrossTable(df_w2_wide$PR, df_w2_wide$diet_type, chisq = TRUE, fisher = TRUE) %>% 
+
+
+#employment: home_office & days at office-----------------------------
+df_w2_wide %>% 
+  split(.$PR) %>% 
+  purrr::map(~psych::describe(.$office, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "office_mean_t1_PR.csv"))
+
+#normalverteilung nicht ok
+#boxplot not ok => transformation no improvement 
+TukeyHSD(aov(df_w2_wide$office ~ df_w2_wide$PR)) %>%  # pr4 deutlich weniger personen wie oben (unterschied noch grösser, mean 2.7)
+  capture.output(., file = here::here("augmented data/stats", "office_diff_canteen_t1_PR.csv"))
+
+df_w2_wide %>% 
+  split(.$PR) %>% 
+  purrr::map(~psych::describe(.$home_o, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "home_office_mean_t1_PR.csv"))
+
+#normalverteilung nicht ok
+#boxplot not ok, test not interpretable => transformation no improvement 
+TukeyHSD(aov(df_w2_wide$home_o ~ df_w2_wide$PR)) %>%  #gleiche bild
+  capture.output(., file = here::here("augmented data/stats", "home_office_diff_canteen_t1_PR.csv"))
+
+#envir_feature--------
+df_w2_wide %>% 
+  split(.$PR) %>% 
+  purrr::map(~ psych::describe(.$envir_feature, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "envir_feature_mean_t1_PR.csv"))
+
+#boxplots not bad
+TukeyHSD(aov(df_w2_wide$eat_canteen ~ df_w2_wide$PR)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "envir_feature_diff_canteen_t1_PR.csv"))
+
+
+#change noticed-----
+df_w2_wide %>% 
+  split(.$PR) %>% 
+  purrr::map(~ Hmisc::describe(.$change_note, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "change_noticed_share_t1_PR.csv"))
+
+df_w2_wide %>% 
+  split(.$PR) %>% 
+  purrr::map(~ Hmisc::describe(.$change_see, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "change_see_share_t1_PR.csv")) #pr4 problematik, they had the feeling there were changes in the menuplan
+
+
+#eat canteen: one outlier 
+#NOTE: pr4 they work more than 80 percent however visit the mensa only 2.8 per week!
+df_w2_wide %>% 
+  filter(eat_canteen != 7) %>% 
+  split(.$PR) %>% 
+  purrr::map(~ psych::describe(.$eat_canteen, na.rm = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "eat_canteen_mean_t1_PR.csv"))
+
+TukeyHSD(aov(df_w2_wide$eat_canteen ~ df_w2_wide$PR)) %>%  #pr1 & pr3 regulary canteen visitors; pr2 & pr4 no regulary canteen visitors
+  capture.output(., file = here::here("augmented data/stats", "eat_canteen_diff_canteen_t1_PR.csv"))
+
+```
+
+
+```{r stats diff in time }
+
+#gender----- no diff over time
+df_survey_pr %>% 
+  filter(questions == "gender") %>% 
+  mutate(gmodels::CrossTable(.$answer, .$time, chisq = TRUE)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "gender_test_time_PR.csv"))
+
+#age ------- no diff over time 
+df_survey_pr %>% 
+  filter(questions == "age_years") %>% 
+  mutate(answer = as.numeric(answer)) -> df_age
+ 
+#boxplot ok
+summary.lm(aov(answer ~ time, data = df_age)) %>% #no difference
+  capture.output(., file = here::here("augmented data/stats", "age_test_time_PR.csv"))
+
+
+#educ------: no difff 
+df_survey_pr %>%
+  filter(questions == "educ") %>% 
+  mutate(answer = as.numeric(answer)) -> df_educ
+
+#boxplot ok
+summary.lm(aov(answer ~ time, data = df_educ)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "educ_test_time_PR.csv"))
+
+
+#diet type-----no differences
+df_survey_pr %>% 
+  filter(questions == "diet_type") %>% 
+  mutate(answer = as.numeric(answer)) -> df_diet
+
+gmodels::CrossTable(df_diet$answer, df_diet$time, chisq = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "diet_type_test_time_PR.csv"))
+
+
+#eat_canteen----------: no difference, that is weird 
+df_survey_pr %>%
+  filter(questions == "eat_canteen") %>% 
+  mutate(answer = as.numeric(answer)) -> df_eat
+
+#boxplot ok
+summary.lm(aov(log10(df_eat$answer) ~ df_eat$time)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "eat_canteen_test_time_PR.csv"))
+boxplot(log10(df_eat$answer) ~ df_eat$time)
+
+
+#normalverteilung not ok
+summary.lm(aov(log10(df_eat$answer) ~ df_eat$time * df_eat$PR)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "eat_canteen_test_time_canteen_PR.csv"))
+
+
+#envir_feature-------------- no differences in time
+df_survey_pr %>%
+  filter(questions == "envir_feature") %>% 
+  mutate(answer = as.numeric(answer)) -> df_envir
+
+#boxplot more or less ok
+#normalverteilung not ok!
+summary.lm(glm(df_envir$answer ~ df_envir$time, family = quasipoisson)) %>% #better quasiposson?
+  capture.output(., file = here::here("augmented data/stats", "envir_feature_test_time_PR.csv"))
+boxplot((df_envir$answer) ~ df_envir$time)
+
+
+#office--------differs significant
+#NOTE: t1 less people at the canteens (due to corona)
+df_survey_pr %>% 
+  filter(questions == "office") %>% 
+  mutate(answer = as.numeric(answer)) -> df_office
+
+
+t.test(sqrt(answer) ~ time, data = df_office) %>%
+  capture.output(., file = here::here("augmented data/stats", "office_test_time_PR.csv"))
+  
+summary.lm(aov(sqrt(answer) ~ time, data = df_office)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "office_test_time_PR.csv"))
+# plot(aov(sqrt(answer) ~ time, data = df_office)) #not ok
+boxplot(sqrt(answer) ~ time, data = df_office) #seems not to be to bad
+
+
+
+#food_feature--------------  diff in time per canteen
+patt = paste0("food_feature", 1:8, "$", collapse = "|")
+
+food_feature <- df_survey_pr %>%
+  filter(stringr::str_detect(questions, pattern = patt)) %>%   mutate(answer = as.numeric(answer)) 
+
+
+for(i in paste0("food_feature", 1:8, "$")){
+  
+  #stats for item on t0 per canteen
+  food_feature %>% 
+    filter(stringr::str_detect(questions, pattern = i)) %>% 
+    split(list(.$PR, .$time)) %>% 
+    purrr::map(~psych::describe(.$answer, na.rm = TRUE)) %>%  
+    capture.output(., file = here::here("augmented data/stats", paste0( "food_feature_", stringr::str_sub(i, start = -2, end = -2), "_mean_canteen_t0_t1_PR.csv")))
+  
+  
+  #boxplot not that bad => transformation no improvement 
+  food_feature %>% 
+    filter(stringr::str_detect(questions, pattern = i)) %>% 
+    split(list(.$PR)) %>% 
+    map(~ggplot(., aes(y = answer, x = time)) + geom_boxplot())
+  
+
+  # #normalverteilung nicht ok
+  # food_feature %>% 
+  #   filter(stringr::str_detect(questions, pattern = i)) %>% 
+  #   split(list(.$PR)) %>% 
+  #   purrr::map(~ggplot2::autoplot(aov(answer ~ time, data = food_feature)))
+  
+  #stats per canteen and time
+  food_feature %>% 
+    filter(stringr::str_detect(questions, pattern = i)) %>% 
+    split(list(.$PR)) %>% 
+    purrr::map(~summary.lm(aov(answer ~ time, data = .))) %>%  
+    capture.output(., file = here::here("augmented data/stats", paste0( "food_feature_", stringr::str_sub(i, start = -2, end = -2), "_diff_canteen_t0_t1_PR.csv")))
+
+  #stats between canteen, t0
+  food_feature %>% 
+    filter(time == "T0") %>% #dplyr::do() is not working
+    filter(stringr::str_detect(questions, pattern = i)) -> df_feature
+  
+  summary.lm(aov(answer ~ PR, data = df_feature)) %>%  
+    capture.output(., file = here::here("augmented data/stats", paste0( "food_feature_", stringr::str_sub(i, start = -2, end = -2), "_diff_canteen_t0_PR.csv")))
+  
+  #stats between canteen, t1
+  food_feature %>% 
+    filter(time == "T1") %>% 
+    filter(stringr::str_detect(questions, pattern = i)) -> df_feature
+  
+  summary.lm(aov(answer ~ PR, data = df_feature)) %>%  
+    capture.output(., file = here::here("augmented data/stats", paste0( "food_feature_", stringr::str_sub(i, start = -2, end = -2), "_diff_canteen_t1_PR.csv")))
+  
+  
+}
+  
+
+
+#choice_attitude-------- diff in time per canteen
+patt = paste0("choice_attitude", 1:12, "$", collapse = "|")
+
+choice_attitude <- df_survey_pr %>%
+  filter(stringr::str_detect(questions, pattern = patt)) %>%   mutate(answer = as.numeric(answer)) 
+
+
+for(i in paste0("choice_attitude", 1:12, "$")){
+  
+  #stats for item on t0 per canteen
+  choice_attitude %>% 
+    filter(stringr::str_detect(questions, pattern = i)) %>% 
+    split(list(.$PR, .$time)) %>% 
+    purrr::map(~psych::describe(.$answer, na.rm = TRUE)) %>%  
+    capture.output(., file = here::here("augmented data/stats", paste0( "choice_attitude_", stringr::str_sub(i, start = -3, end = -2), "_mean_canteen_t0_t1_PR.csv")))
+  
+  
+  #boxplot not that bad => transformation no improvement 
+  # choice_attitude %>% 
+  #   filter(stringr::str_detect(questions, pattern = i)) %>% 
+  #   split(list(.$PR)) %>% 
+  #   map(~ggplot(., aes(y = answer, x = time)) + geom_boxplot())
+  
+
+  # #normalverteilung nicht ok
+  # choice_attitude %>% 
+  #   filter(stringr::str_detect(questions, pattern = i)) %>% 
+  #   split(list(.$PR)) %>% 
+  #   purrr::map(~ggplot2::autoplot(aov(answer ~ time, data = choice_attitude)))
+  
+  #stats per canteen and time
+  choice_attitude %>% 
+    filter(stringr::str_detect(questions, pattern = i)) %>% 
+    #drop missings
+    tidyr::drop_na(answer) %>% 
+    split(list(.$PR)) %>%
+    purrr::map(~summary.lm(aov(answer ~ time, data = .))) %>%  
+    capture.output(., file = here::here("augmented data/stats", paste0( "choice_attitude_", stringr::str_sub(i, start = -3, end = -2), "_diff_canteen_t0_t1_PR.csv")))
+
+  #stats between canteen, t0
+  choice_attitude %>% 
+    filter(time == "T0") %>% 
+    filter(stringr::str_detect(questions, pattern = i)) -> df_att
+  
+  summary.lm(aov(answer ~ PR, data = df_att))  %>%   
+    capture.output(., file = here::here("augmented data/stats", paste0( "choice_attitude_", stringr::str_sub(i, start = -3, end = -2), "_diff_canteen_t0_PR.csv")))
+  
+  #stats between canteen, t1
+  choice_attitude %>% 
+    filter(time == "T1") %>% 
+    filter(stringr::str_detect(questions, pattern = i)) -> df_att
+  
+  summary.lm(aov(answer ~ PR, data = df_att)) %>%  
+    capture.output(., file = here::here("augmented data/stats", paste0( "choice_attitude_", stringr::str_sub(i, start = -3, end = -2), "_diff_canteen_t1_PR.csv")))
+  
+  
+}
+  
+
+```
+
+
+```{r stats diff in time per canteen: age, gender, education, behavioral change (envir_feature), diet_type, eat_canteen}
+
+##PR1----
+  
+PR = "PR1"
+
+##age: no diff
+##boxplot: ok
+summary.lm(aov(as.numeric(answer) ~ time, data = df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "age_years", ])) %>%   capture.output(., file = here::here("augmented data/stats", paste0("age_test_", PR, "_time_PR.csv")))
+
+aggregate(as.numeric(answer) ~ time, data = df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "age_years", ], 
+          FUN = function(x) c(mn = mean(x, na.rm = TRUE), len = length(x))) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("age_mean_", PR, "_PR.csv")))
+  
+
+##gender: no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "gender", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "gender", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "gender")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("gender_test_", PR, "_time_PR.csv")))
+
+
+#meal_choice: diff in meal choice (more menü1 in t1, less menu2 in t1)
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "meal_description", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "meal_description", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "gender")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("meal_choice_test_", PR, "_time_PR.csv")))
+
+
+#education: no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "educ", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "educ", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "educ")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("education_test_", PR, "_time_PR.csv")))
+
+
+#behavioral change (envir_feature): no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "envir_feature", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "envir_feature", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "envir_feature")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("envir_feature_test_", PR, "_time_PR.csv")))
+
+
+#diet_type (eat habits): no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "diet_type", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "diet_type", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "eat_habits")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("diet_type_test_", PR, "_time_PR.csv")))
+
+
+#eat canteen: no diff
+#boxplot not that good
+#normalverteilung not ok
+summary.lm(aov(as.numeric(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "eat_canteen", ]$answer) ~ df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "eat_canteen", ]$time)) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("eat_canteen_test_", PR, "_time_PR.csv")))
+
+aggregate(as.numeric(answer) ~ time, data = df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "eat_canteen", ], 
+          FUN = function(x) c(mn = mean(x, na.rm = TRUE), len = length(x))) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("eat_canteen_mean", PR, "_PR.csv")))
+
+
+
+##PR2----------
+PR = "PR2"
+
+##age: no diff
+##boxplot: ok
+summary.lm(aov(as.numeric(answer) ~ time, data = df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "age_years", ])) %>%   capture.output(., file = here::here("augmented data/stats", paste0("age_test_", PR, "_time_PR.csv")))
+
+aggregate(as.numeric(answer) ~ time, data = df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "age_years", ], 
+          FUN = function(x) c(mn = mean(x, na.rm = TRUE), len = length(x))) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("age_mean_", PR, "_PR.csv")))
+  
+
+##gender: no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "gender", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "gender", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "gender")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("gender_test_", PR, "_time_PR.csv")))
+
+
+#meal_choice: no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "meal_description", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "meal_description", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "gender")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("meal_content_test_", PR, "_time_PR.csv")))
+
+
+#education: no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "educ", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "educ", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "educ")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("education_test_", PR, "_time_PR.csv")))
+
+
+#behavioral change (envir_feature): no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "envir_feature", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "envir_feature", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "envir_feature")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("envir_feature_test_", PR, "_time_PR.csv")))
+
+
+#diet_type (eat habits): no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "diet_type", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "diet_type", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "eat_habits")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("diet_type_test_", PR, "_time_PR.csv")))
+
+
+#eat canteen: no diff
+summary.lm(aov(as.numeric(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "eat_canteen", ]$answer) ~ df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "eat_canteen", ]$time)) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("eat_canteen_test_", PR, "_time_PR.csv")))
+
+aggregate(as.numeric(answer) ~ time, data = df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "eat_canteen", ], 
+          FUN = function(x) c(mn = mean(x, na.rm = TRUE), len = length(x))) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("eat_canteen_mean", PR, "_PR.csv")))
+
+
+##PR3--------------
+  
+PR = "PR3"
+
+##age: no diff
+##boxplot: ok
+summary.lm(aov(as.numeric(answer) ~ time, data = df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "age_years", ])) %>%   capture.output(., file = here::here("augmented data/stats", paste0("age_test_", PR, "_time_PR.csv")))
+
+aggregate(as.numeric(answer) ~ time, data = df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "age_years", ], 
+          FUN = function(x) c(mn = mean(x, na.rm = TRUE), len = length(x))) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("age_mean_", PR, "_PR.csv")))
+  
+
+##gender: no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "gender", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "gender", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "gender")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("gender_test_", PR, "_time_PR.csv")))
+
+
+#meal_choice: no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "meal_description", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "meal_description", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "gender")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("meal_content_test_", PR, "_time_PR.csv")))
+
+
+#education: no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "educ", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "educ", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "educ")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("education_test_", PR, "_time_PR.csv")))
+
+
+#behavioral change (envir_feature): no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "envir_feature", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "envir_feature", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "envir_feature")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("envir_feature_test_", PR, "_time_PR.csv")))
+
+
+#diet_type (eat habits): no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "diet_type", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "diet_type", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "eat_habits")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("diet_type_test_", PR, "_time_PR.csv")))
+
+
+#eat canteen: no diff
+summary.lm(aov(as.numeric(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "eat_canteen", ]$answer) ~ df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "eat_canteen", ]$time)) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("eat_canteen_test_", PR, "_time_PR.csv")))
+
+aggregate(as.numeric(answer) ~ time, data = df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "eat_canteen", ], 
+          FUN = function(x) c(mn = mean(x, na.rm = TRUE), len = length(x))) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("eat_canteen_mean", PR, "_PR.csv")))
+
+##PR4
+PR = "PR4"
+
+##age: diff in t1 are older
+##boxplot & normalverteilung: ok
+summary.lm(aov(as.numeric(answer) ~ time, data = df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "age_years", ])) %>%   capture.output(., file = here::here("augmented data/stats", paste0("age_test_", PR, "_time_PR.csv")))
+
+aggregate(as.numeric(answer) ~ time, data = df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "age_years", ], 
+          FUN = function(x) c(mn = mean(x, na.rm = TRUE), len = length(x))) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("age_mean_", PR, "_PR.csv")))
+  
+
+##gender: no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "gender", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "gender", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "gender")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("gender_test_", PR, "_time_PR.csv")))
+
+
+#meal_choice: no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "meal_description", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "meal_description", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "gender")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("meal_content_test_", PR, "_time_PR.csv")))
+
+
+#education: no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "educ", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "educ", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "educ")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("education_test_", PR, "_time_PR.csv")))
+
+
+#behavioral change (envir_feature): no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "envir_feature", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "envir_feature", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "envir_feature")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("envir_feature_test_", PR, "_time_PR.csv")))
+
+
+#diet_type (eat habits): no diff
+gmodels::CrossTable(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "diet_type", ]$time, df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "diet_type", ]$answer, chisq = TRUE, fisher = TRUE, dnn = c("time", "eat_habits")) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("diet_type_test_", PR, "_time_PR.csv")))
+
+
+#eat canteen: no diff
+summary.lm(aov(as.numeric(df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "eat_canteen", ]$answer) ~ df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "eat_canteen", ]$time)) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("eat_canteen_test_", PR, "_time_PR.csv")))
+
+aggregate(as.numeric(answer) ~ time, data = df_survey_pr[df_survey_pr$PR == toString(PR) & df_survey_pr$questions == "eat_canteen", ], 
+          FUN = function(x) c(mn = mean(x, na.rm = TRUE), len = length(x))) %>% 
+  capture.output(., file = here::here("augmented data/stats", paste0("eat_canteen_mean", PR, "_PR.csv")))
+
+```
+
+```{r stats difference PR and or time: age, eat_canteen, envir_feature, attitude (city_offer1 & 3)}
+#####
+# diff in pr and/or time
+#####
+
+#age
+df_survey_pr %>%
+  filter(questions == "age_years") %>% 
+  mutate(answer = as.numeric(answer))-> df_age
+
+#normalverteilung not that bad 
+summary(glm(answer ~ time *PR, data = df_age)) #there are only diff between PR's
+
+#envir_feature: no differences between PR in T0
+df_survey_pr %>%
+  filter(questions == "envir_feature") %>% 
+  mutate(answer = as.numeric(answer)) %>% 
+  filter(time == "T0") -> df_envir
+
+#more of less ok
+boxplot(df_envir$answer ~ df_envir$PR)
+
+#stats
+df_envir %>% 
+  split(.$PR) %>% 
+  purrr::map(~Hmisc::describe(.$answer))
+
+#chisq and fisher.test
+gmodels::CrossTable(df_envir$answer, df_envir$PR, chisq = TRUE)
+fisher.test(df_envir$answer, df_envir$PR, simulate.p.value = 1000000) %>% 
+  capture.output(., file = here::here("augmented data/stats", "envir_fature_test_canteen_PR.csv"))
+
+
+#eat_canteen: no diff in time and PR
+df_survey_pr %>%
+  filter(questions == "eat_canteen") %>% 
+  mutate(answer = as.numeric(answer)) -> df_eat
+
+#normalverteilung not ok
+summary.lm(glm(log10(df_eat$answer) ~ df_eat$time * df_eat$PR, family = quasipoisson)) %>% 
+  capture.output(., file = here::here("augmented data/stats", "eat_canteen_test_time_canteen_PR.csv"))
+
+
+#envir_feature: no differences between PR
+df_survey_pr %>%
+  filter(questions == "diet_type") %>% 
+  mutate(answer = as.numeric(answer)) -> df_type  
+  # filter(time == "T1") -> df_type
+
+#stats
+df_type %>% 
+  split(.$PR) %>% 
+  purrr::map(~Hmisc::describe(.$answer))
+
+#chisq and fisher.test
+gmodels::CrossTable(df_type$answer, df_type$PR, chisq = TRUE)
+fisher.test(df_type$answer, df_type$PR, simulate.p.value = 1000000, B = 10000) %>% 
+  capture.output(., file = here::here("augmented data/stats", "envir_feature_test_canteen_PR.csv"))
+
+
+
+#attitude: city offer1 (Meal_offer_city)
+offer_city <- df_survey_pr %>%
+  filter(stringr::str_detect(questions, pattern = paste0("meal_offer_city", 1, "$", collapse = "|"))) %>% 
+  mutate(answer = as.numeric(answer)) 
+
+#stats
+offer_city %>% 
+  split(list(.$PR, .$time)) %>% 
+  purrr::map(~psych::describe(.$answer, na.rm = TRUE)) %>%  
+  capture.output(., file = here::here("augmented data/stats", "offer_city1_mean_time_PR.csv"))
+
+#normalverteilung: not ok
+#boxplots: not bad, however t1 looks not nice
+summary.lm(aov(answer ~ time, data = offer_city)) %>%  #there are some differences
+  capture.output(., file = here::here("augmented data/stats", "offer_city1_test_time_PR.csv"))
+
+#normalverteilung not ok
+summary.lm(aov(answer ~ PR, data = offer_city[offer_city$time == "T0",])) %>%  #there are some differences
+  capture.output(., file = here::here("augmented data/stats", "offer_city1_diff_canteen_T0_PR.csv"))
+
+#normalverteilung not ok
+summary.lm(aov(answer ~ PR, data = offer_city[offer_city$time == "T1",])) %>%  #there are some differences
+  capture.output(., file = here::here("augmented data/stats", "offer_city1_diff_canteen_T1_PR.csv"))
+
+
+#stats
+aggregate(answer ~ PR, data = offer_city, FUN = mean)
+
+
+#attitude: city offer3 (Meal_offer_city)
+offer_city <- df_survey_pr %>%
+  filter(stringr::str_detect(questions, pattern = paste0("meal_offer_city", 3, "$", collapse = "|"))) %>% 
+  mutate(answer = as.numeric(answer)) 
+
+  
+offer_city_gender <- df_survey_pr %>%
+  filter(stringr::str_detect(questions, pattern = paste0("meal_offer_city", 3, "$", collapse = "|")) | questions == "gender") %>% 
+  pivot_wider(., id_cols = c("ID", "PR", "time"), names_from = "questions", values_from = "answer")  
+  
+  
+#stats
+offer_city %>% 
+  split(list(.$PR, .$time)) %>% 
+  purrr::map(~psych::describe(.$answer, na.rm = TRUE)) %>%  
+  capture.output(., file = here::here("augmented data/stats", "offer_city3_mean_time_PR.csv"))
+
+#normalverteilung: not ok
+#boxplots: not bad, however t1 looks not nice
+summary.lm(aov(answer ~ time, data = offer_city)) %>%  #there are some differences
+  capture.output(., file = here::here("augmented data/stats", "offer_city3_test_time_PR.csv"))
+
+#normalverteilung not ok
+summary.lm(aov(answer ~ PR, data = offer_city[offer_city$time == "T0",])) %>%  #there are some differences
+  capture.output(., file = here::here("augmented data/stats", "offer_city3_diff_canteen_T0_PR.csv"))
+
+#normalverteilung not ok
+summary.lm(aov(log10(answer) ~ PR, data = offer_city[offer_city$time == "T1",])) %>%  #there are some differences
+  capture.output(., file = here::here("augmented data/stats", "offer_city3_diff_canteen_T1_PR.csv"))
+
+
+#stats
+aggregate(answer ~ PR, data = offer_city, FUN = mean)
+
+```
+
+
+
+```{r stats between gender & diet_type per PR}
+#####
+#other stats
+#####
+
+#gender and diet_type: t0
+df_survey_pr %>% 
+  filter(questions == "diet_type" | questions == "gender") %>% 
+  filter(PR == "PR3") %>% 
+  filter(time == "T0") %>% 
+  pivot_wider(id_cols = c("time", "PR", "date"), names_from = c("questions"), values_from = "answer") -> df_gender_diet
+
+gmodels::CrossTable(df_gender_diet$diet_type, df_gender_diet$gender, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "diet_type_test_gender_t0_PR3.csv"))
+
+#gender and diet_type: t1
+df_survey_pr %>% 
+  filter(questions == "diet_type" | questions == "gender") %>% 
+  filter(PR == "PR3") %>% 
+  filter(time == "T1") %>% 
+  pivot_wider(id_cols = c("time", "PR", "date"), names_from = c("questions"), values_from = "answer") -> df_gender_diet
+
+gmodels::CrossTable(df_gender_diet$diet_type, df_gender_diet$gender, chisq = TRUE, fisher = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "diet_type_test_gender_t1_PR3.csv"))
+
+
+#gender and diet_type
+df_survey_pr %>% 
+  filter(questions == "diet_type" | questions == "gender") %>% 
+  # filter(PR == "PR3") %>% 
+  pivot_wider(id_cols = c("time", "PR", "date"), names_from = c("questions"), values_from = "answer") -> df_gender_diet
+
+gmodels::CrossTable(interaction(df_gender_diet$gender, df_gender_diet$PR), df_gender_diet$diet_type, chisq = TRUE) %>% 
+  capture.output(., file = here::here("augmented data/stats", "diet_type_test_gender_PR.csv"))
+
+
+```

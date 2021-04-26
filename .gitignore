@@ -1,0 +1,28 @@
+# exclude all files with ending:
+.csv
+.docx
+.pdf
+.Rproj
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Rbuildignore
+*.txt
+
+# exclude all folders
+/archive
+/augmented data
+/augmented data/archive
+/fonts
+/online_plots
+/plots
+/plots/archive
+/papers
+/raw data
+/scripts from another project
+/results
+/results/_archive
+
+#no zip files
+*.zip

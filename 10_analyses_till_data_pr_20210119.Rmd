@@ -1,0 +1,602 @@
+---
+title: "PR till data - analysis"
+author: "gian-andrea egeler, 2021"
+output: html_document
+---
+
+
+```{r setup, message=FALSE, echo = FALSE}
+
+knitr::opts_chunk$set(echo = F, message = F, fig.align = "center", 
+                      out.width = "80%")
+
+#load packages
+library(dplyr)
+library(lubridate)
+library(here)
+library(readr)
+library(ggplot2)
+
+#load config for plot and path
+source("R/config_plot.R")
+source("R/config_path.R")
+
+# load functions
+source("R/08_function_plot_intervention_PR.R")
+
+
+# load data & prepare it a bit
+# source("R/08_load_till_data_PR.R") # takes a while, thus read data separately
+
+#2019
+dt_pr_2019 <- readr::read_delim(here::here("augmented data/sellings_pr_2019.csv"),
+                                delim = ",") %>% 
+  #filter dates: between kw 32 & 45
+  filter(date > "2019-08-04" & date < "2019-11-09") 
+
+
+#2020
+dt_pr_2020 <- readr::read_delim(here::here("augmented data/sellings_pr_2020.csv"),
+                                delim = ",") %>% 
+  #filter dates: between kw 32 & 45
+  filter(date > "2020-08-02" & date < "2020-11-08") %>% 
+  mutate(kw = lubridate::isoweek(date)) %>% 
+  mutate(pr = if_else(pr == "PR1", "PR1 (K)", pr))
+
+
+#combine both datasets
+sellings_tot <- bind_rows(dt_pr_2019, dt_pr_2020) %>% 
+  mutate(year = lubridate::year(date),
+         kw = lubridate::isoweek(date)) %>% 
+  mutate(pr = if_else(pr == "PR1", "PR1 (K)", pr))
+
+```
+
+```{r comparison articles 2019 vs. 2020}
+#todos:
+#1)check wochenhit and wochensnack erz => seems only to have one entry?? if so drop it => ok
+#2)check menusammelpass => integrate it to the veg meals => only 5, thus let it be
+
+# prepare data
+df <- sellings_tot %>% 
+  group_by(year, pr, meal_line) %>% 
+  summarise(tot_t = sum(tot_sold)) %>% 
+  mutate(pct = tot_t / sum(tot_t)) %>% 
+  ungroup()
+
+# text
+df_t <- df %>% 
+  group_by(year, pr) %>% 
+  summarise(tot = sum(tot_t)) %>% 
+  mutate(xlab_ = paste0("(n = ", tot, ")"),
+         xlab_2 = paste(pr, year, sep = " "),
+         xlab = paste(xlab_2, xlab_, sep = "\n")) %>% 
+  ungroup() %>% 
+  left_join(df, ., by = c("pr", "year"))
+  
+
+#for help see: https://stackoverflow.com/questions/14840542/place-a-legend-for-each-facet-wrap-grid-in-ggplot2
+library(gridExtra)
+library(RColorBrewer)
+
+xs <- split(df_t, f = df_t$pr)
+p1 <- ggplot(xs$PR1, aes(x = xlab, y = pct, fill = meal_line)) +
+  geom_bar(stat = "identity", position = position_stack(), width = .6) +
+    scale_fill_brewer("Set3", type = "qual") + 
+    scale_y_origin(labels = scales::percent) +
+    guides(fill = guide_legend("")) +
+    geom_text(aes(label = if_else(pct > 0.02, scales::percent(pct, accuracy = 1), "")), 
+              position = position_stack(reverse = F, vjust = .5), size = 22*converter, family = theme_get()$text$family) +
+    labs(y = "", x = "") +
+    facet_wrap(~ pr, ncol = 1) +
+    mytheme
+
+p2 <- p1 %+% xs$PR2
+p3 <- p1 %+% xs$PR3
+p4 <- p1 %+% xs$PR4
+
+p <- grid.arrange(p1,p2,p3, p4, nrow = 1)
+
+
+ggsave(plot = p, 
+       filename = paste0(till_plot_pr, "meal_line_overall_grid_20210126.pdf"),
+       height = 20,
+       width = 40,
+       device = cairo_pdf) 
+
+
+ggsave(plot = p, 
+       filename = paste0(till_plot_pr, "meal_line_overall_grid_20210126.png"),
+       height = 20,
+       width = 40,
+       units = "in",
+       device = "png") 
+
+```
+
+```{r corona 2019 vs. 2020: KW32 until KW45}
+
+df <- sellings_tot %>% 
+  group_by(year, kw, pr) %>% # meal_line is not a good variable, lots of missings
+  summarise(tot_sold = sum(tot_sold)) %>% 
+  ungroup() 
+
+# txt
+df_t <- df %>% 
+  group_by(year, pr) %>% 
+  summarise(tot = sum(tot_sold)) %>% 
+  ungroup() %>% 
+  mutate(guide_leg_ = paste(pr, year, sep = " "),
+         # num = format(.$tot, big.mark = "'", scientific = F),
+         txt = paste0("(", tot, " Menüverkäufe", ")"),
+         guide_leg = paste(guide_leg_, txt, sep = "\n")) %>% 
+    left_join(., df, by = c("year", "pr"))
+
+#plot
+# colors needs to be adapted
+p <- ggplot(df_t, aes(x = kw, y = tot_sold, color = guide_leg, 
+                      group = guide_leg)) +
+  geom_point(stat = "identity", size = 2.3) + #aes(shape = factor(year) (http://www.sthda.com/english/wiki/ggplot2-point-shapes)
+  geom_line(size = 1.1) +
+  # scale_color_manual(values = c("#eeda51", "#f9ecbc", "#aab92e", "#d6da4f", "#579031", "#d6da4f", "#f6d516", "#fcf18e")) +
+  scale_y_origin(breaks = scales::breaks_extended(6),
+                     labels = scales::label_number(big.mark = "'"),
+                 limits = c(0, 1500)) +
+  scale_x_continuous( limits = c(32, 45), breaks = seq(32, 45, 1), expansion(mult = c(0.02, 0.02))) +
+  guides(color = guide_legend("Personalrestaurant",
+                              keywidth = 0.8, #https://stackoverflow.com/questions/11366964/is-there-a-way-to-change-the-spacing-between-legend-items-in-ggplot2
+                              keyheight = 0.8,
+                              title.vjust = 1,
+                              default.unit="inch"), shape = FALSE) +
+  labs(y = "Menüverkäufe pro Woche", x = "") +
+  mytheme
+
+
+ggsave(plot = p, 
+       filename = paste0(till_plot_pr, "meal_sales_overall_20210126.pdf"),
+       height = 12,
+       width = 20,
+       device = cairo_pdf)
+
+
+ggsave(plot = p, 
+       filename = paste0(till_plot_pr, "meal_sales_overall_20210126.png"),
+       height = 12,
+       width = 20,
+       device = "png")
+
+
+```
+
+```{r meal_content 2019 vs. 2020: kw32 - kw45}
+
+# prepare data
+df <- sellings_tot %>%
+  filter(kw >= 32 & kw <= 45) %>% 
+  #count fish to meat
+  mutate(meal_label = stringi::stri_replace_all_regex(.$meal_label, "fish", "meat")) %>% 
+  group_by(year, pr, meal_label) %>% # meal_line is not a good variable, lots of missings
+  summarise(tot_ = sum(tot_sold)) %>% 
+  mutate(pct = tot_ / sum(tot_)) %>% 
+  ungroup()
+
+# text
+df_t <- df %>% 
+  group_by(year, pr) %>% 
+  summarise(tot = sum(tot_)) %>% 
+  mutate(xlab_ = paste0("(n = ", tot,")"),
+         xlab_2 = paste(year, sep = " "),
+         xlab = paste(xlab_2, xlab_, sep = "\n")) %>% 
+  ungroup() %>% 
+  left_join(df, ., by = c("pr", "year")) %>% 
+  mutate(meal_label = factor(meal_label, levels = c("buffet", "fish",  "meat", "vegetarian"), labels = c("Buffet",  "Fisch", "Fleisch", "Vegetarisch")))
+  
+
+# #plot facet
+
+#facet names: https://stackoverflow.com/questions/3472980/how-to-change-facet-labels
+# set_names =  # not necessary yet
+pal = c("Buffet" = "#f9ecbc", 
+        "Fleisch" = "#eeda51",
+        "Vegetarisch" = "#c1cf3b")
+
+
+p <- ggplot(df_t, aes(x = xlab, y = pct, fill = meal_label)) +
+    geom_bar(stat = "identity", position = position_stack(), width = .6) +
+    scale_y_origin(labels = scales::percent) +
+    scale_fill_manual(values = pal) +
+    guides(fill = guide_legend("Menüinhalt", title.vjust = 1)) +
+    geom_text(aes(label = if_else(pct > 0.02, scales::percent(pct, accuracy = 1), "")),
+              position = position_stack(reverse = F, vjust = .5), size = 22*converter, family = theme_get()$text$family) +
+    labs(y = "", x = "") +
+    facet_wrap( ~ pr, scales = "free", nrow = 1) +
+    mytheme
+
+
+ggsave(plot = p,
+       filename =  paste0(till_plot_pr, "meal_content_2019_2020_kw32kw45.pdf"),
+       height = 16,
+       width = 20,
+       device = cairo_pdf)
+
+ggsave(plot = p,
+       filename =  paste0(till_plot_pr, "meal_content_2019_2020_kw32kw45.png"),
+       height = 16,
+       width = 20,
+       device = "png")
+
+```
+
+```{r meal content 2020: KW38 - KW43}
+#prepare data
+df <- dt_pr_2020 %>% 
+  filter(kw >=38 & kw <= 43) %>% 
+  group_by(pr, meal_label) %>% 
+  summarise(tot_ =  sum(tot_sold)) %>% 
+  mutate(pct = tot_ / sum(tot_)) 
+
+# text
+df_t <- df %>% 
+  group_by(pr) %>% 
+  summarise(tot = sum(tot_)) %>% 
+  mutate(xlab_ = paste0("(n = ", tot,")"),
+         xlab = paste(pr, xlab_, sep = "\n")) %>% 
+  ungroup() %>% 
+  left_join(df, ., by = c("pr")) %>% 
+  mutate(meal_label = factor(meal_label, levels = c("buffet", "fish", "meat",  "vegetarian"), labels = c("Buffet", "Fisch", "Fleisch", "Vegetarisch")))
+  
+  
+#plot: 
+#define some params
+hg = 9
+wd = 10
+
+pal = c("Buffet" = "#f9ecbc", 
+        "Fleisch" = "#eeda51",
+        "Vegetarisch" = "#c1cf3b", 
+        "Fisch" = "#fcf18e")
+
+p <- ggplot(df_t, aes(x = xlab, y = pct, fill = meal_label)) +
+  geom_bar(stat = "identity", position = position_stack(), width = .6) +
+    scale_fill_manual(values = pal) + 
+    scale_y_origin(labels = scales::percent) +
+    guides(fill = guide_legend("Menüinhalt")) +
+    geom_text(aes(label = if_else(pct > 0.02, scales::percent(pct, accuracy = 1), "")), 
+              position = position_stack(reverse = F, vjust = .5), size = 22*converter, family = theme_get()$text$family) +
+    labs(y = "", x = "") +
+    mytheme
+    
+
+ggsave(plot = p, 
+       filename = paste0(till_plot_pr, "meal_label_aggreg_intervention_kw38kw43.pdf"),
+       height = hg,
+       width = wd,
+       device = cairo_pdf)
+
+ggsave(plot = p, 
+       filename = paste0(till_plot_pr, "meal_label_aggreg_intervention_kw38kw43.png"),
+       height = hg,
+       width = wd,
+       device = "png")
+
+
+```
+
+```{r pre during post intervention per canteen: kw32 - kw45}
+#set some parameters
+#attention same grey shade e.g. grey65 seems to be different than in the ASZ, however why?
+
+plot_week_pr(dt_pr_2020, canteen_pr = "PR1 (K)", save = TRUE, height = 9,
+                     width = 25)
+
+plot_week_pr(dt_pr_2020, canteen_pr = "PR2", save = TRUE, height = 9,
+                     width = 25)
+
+plot_week_pr(dt_pr_2020, canteen_pr = "PR3", save = TRUE, height = 9,
+                     width = 25)
+
+plot_week_pr(dt_pr_2020, canteen_pr = "PR4", save = TRUE, height = 9,
+                     width = 25)
+
+
+```
+
+
+```{r pre during post intervention overall: kw32 - kw45}
+
+plot_overall_pr(dt_pr_2020, save = TRUE, height = 18, width = 25) #calculating "png" takes a while
+
+
+#stats
+dt_pr_2020 %>% 
+  #change kw for plotting
+  dplyr::mutate(condit = dplyr::case_when(kw == 32 ~ "no Intervention",
+                                          kw == 33 ~ "no Intervention",
+                                       kw == 34 ~ "no Intervention",
+                                       kw == 35 ~ "no Intervention",
+                                       kw == 36 ~ "no Intervention",
+                                       kw == 37 ~ "no Intervention",
+                                       kw == 38 ~ "Intervention",
+                                       kw == 39 ~ "Intervention", 
+                                       kw == 40 ~ "Intervention",
+                                       kw == 41 ~ "Intervention",
+                                       kw == 42 ~ "Intervention",
+                                       kw == 43 ~ "Intervention",
+                                       kw == 44 ~ "no Intervention",
+                                       kw == 45 ~ "no Intervention")) %>% 
+  # mutate(meal_label = if_else(meal_label == "fish", "meat", meal_label)) %>% 
+  drop_na(meal_label) -> df_stats
+
+
+#group it again
+df_stats %>% group_by(pr, condit, meal_label) %>% 
+  summarise(tot = sum(tot_sold)) %>% 
+  mutate(pct = scales::percent(tot / sum(tot), accuracy = 1)) %>% 
+  filter(meal_label == "vegetarian") -> tt
+
+
+#try glm: however not good, coefficients are missing => meaning??
+summary.lm(glm(tot_sold ~  pr * condit * meal_label, data = df_stats, family = quasipoisson))
+
+
+```
+
+
+```{r intervention pr2: kw38-kw43}
+
+#prepare sellings
+pr2 <- dt_pr_2020 %>% 
+  #drop wochenhit
+  filter(pr == "PR2" & meal_line != "buffet") %>%
+  #change kw for plotting
+  dplyr::mutate(condit = dplyr::case_when(kw == 32 ~ "Vorher",
+                                          kw == 33 ~ "Vorher",
+                                       kw == 34 ~ "Vorher",
+                                       kw == 35 ~ "Vorher",
+                                       kw == 36 ~ "Vorher",
+                                       kw == 37 ~ "Vorher",
+                                       kw == 38 ~ "Intervention",
+                                       kw == 39 ~ "Intervention", 
+                                       kw == 40 ~ "Intervention",
+                                       kw == 41 ~ "Intervention",
+                                       kw == 42 ~ "Intervention",
+                                       kw == 43 ~ "Intervention",
+                                       kw == 44 ~ "Nachher",
+                                       kw == 45 ~ "Nachher")) %>% 
+  group_by(meal_line, condit, meal_label) %>% 
+  summarise(sold_offer = sum(tot_sold)) %>% 
+  mutate(pct = sold_offer / sum(sold_offer)) %>% 
+  ungroup() %>% 
+  #drop kw32
+  drop_na(condit)
+
+#overall
+pr2_t <- pr2 %>% 
+  group_by(condit, meal_line) %>% 
+  summarise(tot = sum(sold_offer)) %>% 
+  ungroup() %>% 
+  left_join(., pr2, by = c("condit", "meal_line")) %>% 
+  mutate(info = "Menüverkäufe", 
+         info = as_factor(info)) 
+
+# offer before and after, needed to be double checked 
+# 5 menu1 = meat; 1menu3 fish; 4 menu3 vegetarian
+offer_pr2_before <- tibble(condit = "Vorher",
+                             meal_line = rep(c("menu1", "menu3"), each = 30),
+                             meal_label = c(rep("meat", times = 30), rep("vegetarian", each = 18),  rep("fish", each = 12))) # for six weeks
+
+offer_pr2_after <- tibble(condit = "Nachher",
+                             meal_line = rep(c("menu1", "menu3"), each = 5),
+                             meal_label = c(rep("meat", each = 5), rep("vegetarian", each = 3), rep("fish", each = 2))) #only for one week; one week was the nachhaltigkeitswoche!!
+
+
+# load interventin data
+#on some days, they were two meat dishes: 15.09.2020; 18.09.2020
+offer_pr2 <- readr::read_delim(paste0(till_pr, "PR2/intervention_pr2.csv"), delim = ";") %>% 
+  mutate(condit = "Intervention") %>%
+  # add offer from before and after
+  bind_rows(offer_pr2_before, offer_pr2_after) %>% 
+  group_by(condit, meal_line, meal_label) %>% 
+  summarise(sold_offer = n()) %>% 
+  mutate(pct = sold_offer / sum(sold_offer)) %>% 
+  ungroup()
+
+#get overall sellings
+offer_t <- offer_pr2 %>% 
+  group_by(condit, meal_line) %>% 
+  summarise(tot = sum(sold_offer)) %>% 
+  ungroup() %>% 
+  left_join(., offer_pr2, by = c("condit", "meal_line")) %>% 
+  #set new factors for the order
+  mutate(condit = as_factor(condit),
+         condit = fct_relevel(condit, "Vorher")) %>% 
+  mutate(info = "Angebot",
+         info = as_factor(info))
+
+
+#concatenate both datasets, and prepare for plot
+ds_p <- bind_rows(pr2_t, offer_t) %>% 
+  #set new factors for the order
+  mutate(meal_line = as_factor(meal_line)) %>%  #info = fct_relevel(info, "Angebot"),
+  mutate(sell = paste0("(n = ", tot, ")"),
+         xlab_ = paste(info, if_else(meal_line == "menu1", "Menü 1", "Menü 3"), sep = "\n"), 
+         xlab = paste(xlab_, sell, sep = "\n"))
+
+#plot                                                
+pal = c("Buffet" = "#f9ecbc", 
+        "Fleisch" = "#eeda51",
+        "Vegetarisch" = "#c1cf3b", 
+        "Fisch" = "#fcf18e")
+  
+# makes no sense this plot!
+p <- ggplot2::ggplot(ds_p, aes(x = forcats::lvls_reorder(factor(xlab), idx = c(1, 6, 3, 10, 5, 8, 2, 7, 4, 9)),
+                               y = pct, 
+                               fill = factor(meal_label, 
+                                             levels = c("meat", "fish", "vegetarian"), 
+                                             labels = c("Fleisch", "Fisch", "Vegetarisch")))) + #
+  geom_bar(stat = "identity", position = position_stack(), width = .6) + 
+  facet_grid(~as_factor(condit), scales = "free") +
+  scale_fill_manual(values = pal) +
+  geom_text(aes(label=ifelse(pct > .015,
+                             scales::percent(round(pct, 2),
+                                             accuracy = 1), "")), 
+            size =22*converter, position = position_stack(vjust = 0.52), 
+            family = theme_get()$text$family)+
+  
+  labs(x = "", y = "")+
+  guides(fill = guide_legend("Menüinhalt")) +
+  scale_y_origin(labels=scales::percent) +
+  # scale_y_continuous(labels = scales::percent) +
+  mytheme
+
+#export as pdf and "png"
+ggsave(plot = p,
+      filename =  paste0(till_plot_pr, "pr2_intervention_sell_offer", "_", 
+                                             format(Sys.Date(), "%Y%m%d"),
+                         ".pdf"),
+      width =30,
+      height = 16,
+      device = cairo_pdf)
+
+ggsave(plot = p,
+      filename =  paste0(till_plot_pr, "pr2_intervention_sell_offer", "_", 
+                                             format(Sys.Date(), "%Y%m%d"),
+                         ".png"),
+      width =30,
+      height = 16,
+      device = "png")
+
+
+```
+
+
+```{r identical meal line: compare one meal line between the four pr}
+dt <- dt_pr_2020 %>% 
+  # filter the right weeks
+  filter(kw == 35 | kw == 36 | kw == 42 | kw == 43) %>% 
+  # drop_na(meal_label) %>% 
+  #change week name
+  mutate(kwn = case_when(kw == 35 ~ "Wo3",
+                        kw == 36 ~ "Wo4",
+                        kw == 42 ~ "WoInt10",
+                        kw == 43 ~ "WoInt11")) %>% 
+  #take only the one meal_line
+  # drop_na(meal_content) %>% 
+  group_by(pr, kwn, meal_label) %>% 
+  summarise(tot = sum(tot_sold)) %>% 
+  mutate(pct = tot / sum(tot))
+
+
+# text
+df_t <- dt %>% 
+  group_by(pr, kwn) %>% 
+  summarise(tot = sum(tot)) %>% 
+  mutate(xlab_ = paste0("(n = ", tot,")"),
+         # xlab_1 = paste(kw, xlab_, sep = "\n"),
+         xlab = paste(kwn, xlab_, sep = "\n")) %>% 
+  ungroup() %>% 
+  left_join(dt, ., by = c("pr", "kwn")) %>% 
+  mutate(meal_label = factor(meal_label, levels = c("buffet", "fish", "meat",  "vegetarian"), labels = c("Buffet", "Fisch", "Fleisch", "Vegetarisch")))
+
+
+#defince colors
+pal = c("Buffet" = "#f9ecbc", 
+        "Fleisch" = "#eeda51",
+        "Vegetarisch" = "#c1cf3b", 
+        "Fisch" = "#fcf18e")
+  
+#plot 
+p <- ggplot2::ggplot(df_t, aes(x = factor(xlab),
+                               y = pct, 
+                               fill = meal_label)) + #
+  geom_bar(stat = "identity", position = position_stack(), width = .6) + 
+  facet_grid(~ pr, scales = "free") +
+  scale_fill_manual(values = pal) +
+  geom_text(aes(label=ifelse(pct > .015,
+                             scales::percent(round(pct, 2),
+                                             accuracy = 1), "")), 
+            size =22*converter, position = position_stack(vjust = 0.52), 
+            family = theme_get()$text$family)+
+  
+  labs(x = "", y = "Anzahl Menüverkäufe in Prozent")+
+  guides(fill = guide_legend("Menüinhalt")) +
+  scale_y_origin(labels=scales::percent) +
+  mytheme
+
+#export as pdf and "png"
+ggsave(plot = p,
+      filename =  paste0(till_plot_pr, "identical_meals_kw35_36_kw42_43", "_", 
+                                             format(Sys.Date(), "%Y%m%d"),
+                         ".pdf"),
+      width =25,
+      height = 9,
+      device = cairo_pdf)
+
+ggsave(plot = p,
+      filename =  paste0(till_plot_pr, "identical_meals_kw35_36_kw42_43", "_", 
+                                             format(Sys.Date(), "%Y%m%d"),
+                         ".png"),
+      width =25,
+      height = 9,
+      device = "png")
+
+########
+#stats
+dt_pr_2020 %>% 
+  #filter only meals to compare
+  # drop_na(meal_content) %>% 
+  #change week name
+  mutate(kwn = case_when(kw == 35 ~ "base",
+                        kw == 36 ~ "base",
+                        kw == 42 ~ "inter",
+                        kw == 43 ~ "inter")) %>% 
+  mutate(meal_label = factor(meal_label, levels = c("meat", "vegetarian", "buffet", "fish"))) -> df_stats
+
+
+#per canteen, makes more sense
+
+##pr1------
+summary.lm(aov(log10(tot_sold) ~ meal_label * kwn, data = df_stats[df_stats$pr == "PR1 (K)",])) %>% capture.output(., file = here::here("augmented data/stats", "aov_pr1_interv_baseline_identical_meals.txt")) #nothing to see
+
+par(mfrow = c(2,2))
+plot(aov(log10(tot_sold) ~ meal_label * kwn, data = df_stats[df_stats$pr == "PR1 (K)",])) #normalverteilung not ok
+
+
+##pr2----------
+
+# gl1 <- glm(log10(tot_sold) ~ meal_label * kwn, data = df_stats[df_stats$pr == "PR2",], family = gaussian)
+# plot(gl1)
+# summary.lm(gl1) #to check the contrasts see aov
+
+summary.lm(aov(log10(tot_sold) ~ meal_label * kwn, data = df_stats[df_stats$pr == "PR2",])) %>% capture.output(., file = here::here("augmented data/stats", "aov_pr2_interv_baseline_identical_meals.txt")) 
+
+par(mfrow = c(2,2))
+plot(aov(log10(tot_sold) ~ meal_label * kwn, data = df_stats[df_stats$pr == "PR2",])) %>% ggsave(., filename = here::here("augmented data/stats", "diagnostics_pr2_interv_baseline_identical_meals.png"), device = "png") #all more ore less ok
+
+par(mfrow = c(1,1))
+boxplot(log10(tot_sold) ~ meal_label * kwn, data = df_stats[df_stats$pr == "PR2",]) %>% ggsave(., filename = here::here("augmented data/stats", "boxplot_log10_pr2_interv_baseline_identical_meals.png"), device = "png", width = 12) #all more ore less ok
+
+
+par(mfrow = c(1,1))
+boxplot(tot_sold ~ meal_label * kwn, data = df_stats[df_stats$pr == "PR2",]) %>% ggsave(., filename = here::here("augmented data/stats", "boxplot_pr2_interv_baseline_identical_meals.png"), device = "png", width = 12)
+
+TukeyHSD(aov(log10(tot_sold) ~ kwn * meal_label, data = df_stats[df_stats$pr == "PR2",])) %>% capture.output(., file = here::here("augmented data/stats", "thukey_pr2_interv_baseline_identical_meals.txt")) #shows not the same effect right?
+
+#plot interaction to see the relation
+interaction.plot(response = df_stats[df_stats$pr == "PR2",]$tot_sold, x.factor = df_stats[df_stats$pr == "PR2",]$kwn, trace.factor = df_stats[df_stats$pr == "PR2",]$meal_label) %>% ggsave(., filename = here::here("augmented data/stats", "interaktionplot_pr2_interv_baseline_identical_meals.png"), device = "png")
+
+##pr3
+summary.lm(aov(log10(tot_sold) ~ meal_label * kwn, data = df_stats[df_stats$pr == "PR3",])) %>% capture.output(., file = here::here("augmented data/stats", "aov_pr3_interv_baseline_identical_meals.txt")) #nothing to see
+
+par(mfrow = c(2,2))
+plot(aov(log10(tot_sold) ~ meal_label * kwn, data = df_stats[df_stats$pr == "PR3",])) #not bad, normalverteilung not that good
+
+
+##pr4
+summary.lm(aov(log10(tot_sold) ~ meal_label * kwn, data = df_stats[df_stats$pr == "PR4",])) %>% capture.output(., file = here::here("augmented data/stats", "aov_pr4_interv_baseline_identical_meals.txt"))
+
+par(mfrow = c(2,2))
+plot(aov(log10(tot_sold) ~ meal_label * kwn, data = df_stats[df_stats$pr == "PR4",])) #not very bad 
+
+```
+

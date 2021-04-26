@@ -1,0 +1,230 @@
+---
+title: "popularity - analysis"
+author: "gian-andrea egeler, april 2020"
+output: html_document
+---
+
+
+```{r setup and load data, message=FALSE, echo = FALSE}
+
+#load packages
+library(dplyr)
+library(readr)
+library(ggplot2)
+
+
+# load popularity calculations
+df_pop <- readr::read_delim(here::here("augmented data/popularity_all_201221.csv"), delim = ",") # from matteo delucci (last update june 2020)
+
+
+# laod info about popularity with meal_label
+df_pop_all <- readr::read_delim("augmented data/merge_add_vars_201221.csv", delim = ",") %>% 
+    mutate(meal_label = str_replace_all(.$meal_label,"Pflanzlich[+]|Pflanzlich|vegetarian", "Vegetarisch")) %>% 
+    mutate(meal_label = str_replace_all(.$meal_label, "Geflügel|Fisch|Fleisch", "meat")) %>% 
+    mutate(meal_label = if_else(.$meal_label == "meat", "Fleisch/Fisch", "Vegetarisch"))
+
+
+# load all sellings
+# source("R/00_load_till_data_popularity.R") #takes a while
+sellings <- readr::read_delim(here::here("augmented data/all_sellings_pr_2019.csv"), delim = ",") %>% 
+    mutate(meal_label = str_replace_all(.$meal_label,"Pflanzlich[+]|Pflanzlich|vegetarian", "Vegetarisch")) %>% 
+    mutate(meal_label = str_replace_all(.$meal_label, "Geflügel|Fisch|Fleisch", "meat")) %>% 
+    mutate(meal_label = if_else(.$meal_label == "meat", "Fleisch/Fisch", "Vegetarisch"))
+
+
+```
+
+
+## stats over all meals (n = 1509)
+```{r stats over all meals, message = FALSE}
+#how many sells overall
+sellings %>% 
+  drop_na(meal_label) %>% 
+  group_by(date, meal_label) %>%
+  slice(1) %>% 
+  summarise(tot = sum(tot_sold)) %>%
+  ungroup() %>% 
+  group_by(meal_label) %>% 
+  summarise(tot = sum(tot)) %>% 
+  mutate(pct = tot/sum(tot))
+
+#stats over all meals for popularity
+df_pop_all %>%
+    group_by(meal_label) %>%
+    summarise(tot = n()) %>%
+    mutate(pct = tot / sum(tot)) %>%
+    mutate(txt = paste(meal_label, scales::percent(.$pct, accuracy = 1), sep = "\n"))
+
+
+```
+
+
+
+## stats to single meals (n = 1078)
+```{r single meals, echo=FALSE, message=FALSE}
+# merge full information
+df_pop_full <- df_pop %>% 
+    # drop date for better merging
+    left_join(., df_pop_all[ , -4], by = c("popularity", "meal_component")) %>% 
+    filter(!duplicated(.)) %>% 
+    drop_na()
+
+# test difference between df_pop and df_pop_full
+anti_join(df_pop_full, df_pop) # there are zero differences, however different rows => why?
+
+# stat of content
+df_pop_full %>% 
+    group_by(meal_label) %>% 
+    summarise(tot = n()) %>% 
+    mutate(pct = tot / sum(tot)) %>% 
+    arrange(-pct)
+
+
+```
+
+
+```{r plot sellings per canteen (treemapify)}
+
+df_sellings <- tibble()
+for (i in unique(sellings$source)){
+  j <- filter(sellings, source %in% i) # get dataframe from the list
+  # prepare data
+  df <- j %>%
+    group_by(date, meal_line, meal_label) %>%
+    slice(1) %>%   # take the first entry, due to wide format => another way would be pivot_wider
+    ungroup() %>%
+    group_by(meal_line, meal_label) %>%
+    summarise(tot = sum(tot_sold)) %>%
+    mutate(source = i) # add info from where the data came
+  
+  df_sellings <- bind_rows(df_sellings, df) # concat data
+  
+}
+
+# overall selligs
+df <- df_sellings %>%
+  #drop salads and stuff
+  drop_na(meal_label) %>% 
+  group_by(source) %>%
+  summarise(tot = sum(tot)) %>%
+  ungroup() %>% 
+  mutate(pct = tot / sum(tot)) %>%
+  # mutate(source = case_when(.$source == "erz19" ~ "PR3",
+  #                           .$source == "novanimal" ~ "PR6",
+  #                           .$source == "triemli19" ~ "PR5",
+  #                           .$source == "waid19" ~ "PR1")) %>%  # erz and novanimal are special
+  mutate(xlab_ = paste("(N =", format(tot, digits = 1, big.mark = "'", scientific = F), ")", sep = ""), 
+         xlab = paste(source, scales::percent(.$pct, accuracy = 1), xlab_,  sep = "\n"))
+
+
+#plot
+library(treemapify)
+pal = c("PR3" = "#fcf18e", "PR1" = "#aab92e", "PR5" = "#d6da4f", "PR6" = "#cda824")
+col = c("#fcf18e", "#aab92e", "#d6da4f", "#cda824")
+
+p <- ggplot(df, aes(fill = xlab, area = pct, label = xlab)) +
+    geom_treemap(show.legend = FALSE) +
+    geom_treemap_text(fontface = "italic", colour = "black", place = "centre",
+                      grow = FALSE) +
+    scale_fill_brewer(palette = "Greys") 
+    
+
+ggsave(filename = here::here(paste0("plots/","treemap_popularity.pdf")),
+         device = cairo_pdf,
+         height = 8,
+         width = 14,
+         plot = p)
+
+
+ggsave(filename = here::here(paste0("plots/","treemap_popularity.png")),
+         device = "png",
+         height = 8,
+         width = 14,
+         plot = p)
+
+# sum over all canteens
+sum(df$tot)
+
+```
+
+
+## Top 10 meat and vegi dishes
+```{r, echo=FALSE}
+# top meat
+meat <- df_pop_full %>% 
+    arrange(desc(.$popularity)) %>% 
+    mutate(Rang = 1:nrow(.)) %>% 
+    filter(meal_label == "Fleisch/Fisch") %>% 
+    top_n(-10) %>% 
+    select(-meal_label, -popularity, -popularity_class) 
+
+    
+#another way: https://rmarkdown.rstudio.com/articles_docx.html
+knitr::kable(meat) %>% 
+  capture.output(., file = here::here("augmented data", "top_meat_meals_popularity.csv")) 
+
+
+# top vegi
+vegi <- df_pop_full %>% 
+    arrange(desc(.$popularity)) %>% 
+    mutate(Rang = 1:nrow(.)) %>% 
+    filter(meal_label == "Vegetarisch") %>% 
+    top_n(-10) %>% 
+    select(-meal_label, -popularity, -popularity_class) 
+   
+
+knitr::kable(vegi) %>% 
+  capture.output(., file = here::here("augmented data", "top_vegi_meals_popularity.csv"))
+
+
+```
+
+
+```{r meal content per canteen}
+# counts only for the three PR's (due to the data): loop is almost not possible to write (due to the different data structure)
+# pr1
+sellings %>% 
+  filter(source == "PR1") %>% 
+  drop_na(meal_label) %>% 
+  group_by(date, meal_label) %>%
+  slice(1) %>% 
+  summarise(tot = sum(tot_sold)) %>%
+  ungroup() %>% 
+  group_by(meal_label) %>% 
+  summarise(tot = sum(tot)) %>% 
+  mutate(pct = tot/sum(tot))
+
+#pr3
+sellings %>% 
+  filter(source == "PR3") %>% 
+  drop_na(meal_label) %>% 
+  group_by(date, meal_label) %>%
+  slice(1) %>% 
+  summarise(tot = sum(tot_sold)) %>%
+  ungroup() %>% 
+  group_by(meal_label) %>% 
+  summarise(tot = sum(tot)) %>% 
+  mutate(pct = tot/sum(tot))
+
+#pr5
+sellings %>% 
+  filter(source == "PR5") %>% 
+  drop_na(meal_label) %>% 
+  group_by(date, meal_label) %>%
+  slice(1) %>% 
+  summarise(tot = sum(tot_sold)) %>%
+  ungroup() %>% 
+  group_by(meal_label) %>% 
+  summarise(tot = sum(tot)) %>% 
+  mutate(pct = tot/sum(tot))
+
+#pr5
+sellings %>% 
+  filter(source == "PR6") %>% 
+  drop_na(meal_label) %>% 
+  group_by(meal_label) %>%
+  summarise(tot = sum(tot_sold)) %>%
+  mutate(pct = tot/sum(tot))
+
+```
+

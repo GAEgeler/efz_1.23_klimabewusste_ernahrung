@@ -1,0 +1,323 @@
+---
+title: "ASZ MenÜerfassung - analysis"
+author: "gian-andrea egeler, 2020"
+output: html_document
+---
+
+
+```{r setup, message=FALSE, echo = FALSE}
+
+knitr::opts_chunk$set(echo = F, message = F, fig.align = "center", 
+                      out.width = "80%")
+
+# load data
+source("R/05_load_data_ASZ.R", encoding = "UTF-8") 
+source("R/05_function_edit_menu_data_AZ.R")
+source("R/05_function_plot_intervention_AZ.R", encoding = "UTF-8")
+
+#load config for plot and path
+source("R/config_plot.R") #attention there is something wrong with ggplot2
+source("R/config_path.R")
+
+
+#save sellings
+# write_delim(df_till_asz,here::here("augmented data/", "sellings_asz_2020.csv"), delim = ",")
+
+```
+
+
+
+```{r asz overall meal_label: KW 36 - KW44}
+#prepare data
+df <- df_till_asz %>% 
+  group_by(ASZ, meal_label) %>% 
+  summarise(tot = sum(tot_sold, na.rm = TRUE)) %>% 
+  mutate(pct = tot / sum(tot)) %>% 
+  ungroup()
+
+#overall
+df_t <- df %>% 
+  group_by(meal_label) %>% 
+  summarise(tot = sum(tot)) %>% 
+  mutate(pct = tot / sum(tot),
+         ASZ = "Alle ASZ") %>% 
+  ungroup() %>% 
+  bind_rows(., df) %>% 
+  mutate(ASZ_p = if_else(ASZ == "AZ1", "AZ1 (K)", ASZ))
+
+#define xlab
+df_p <- df_t %>% 
+  group_by(ASZ_p) %>% 
+  summarise(tot_t = sum(tot)) %>% 
+  mutate(xlab_ = paste0("(n = ", tot_t, ")"),
+           xlab = paste(.$ASZ_p, xlab_, sep = "\n")) %>% 
+  select(-xlab_) %>% 
+  left_join(df_t, ., by = "ASZ_p") %>% 
+  ungroup()
+  
+#plot
+p <- ggplot(df_p, aes(x =  forcats::fct_rev(factor(xlab)), y = pct, fill = factor(meal_label, labels = c("Fleisch", "vegetarisch")))) +
+  geom_bar(stat = "identity", position = position_stack(), width = .6) + 
+  geom_text(aes(label=ifelse(pct > .015, scales::percent(round(pct, 2), accuracy = 1), "")), 
+            size = 22*converter, position = position_stack(vjust = 0.52),
+            family = theme_get()$text$family)+
+  coord_flip()+
+  scale_fill_manual(values = c("Fleisch" = "#eeda51",
+                               "vegetarisch" = "#c1cf3b")) +
+  #adds a emty space between alle and the rest
+  scale_y_origin(labels=scales::percent)+
+  guides(fill = guide_legend("", reverse = T, nrow = 1)) +
+  labs(x = "", y = "\nVerkaufte Gerichte in Prozent\n") +
+  mytheme +
+  theme(legend.position = "bottom")
+
+ggsave(plot = p,
+      filename = paste0(till_plot_asz, colnames(df_p)[1], "_intervention_", "kw35_kw44", 
+                                             format(Sys.Date(), "%Y%m%d"), ".pdf"),
+      width = 16,
+      height = 8,
+      device = cairo_pdf)
+
+ggsave(plot = p,
+      filename = paste0(till_plot_asz, colnames(df_p)[1], "_intervention_", "kw35_kw44", 
+                                             format(Sys.Date(), "%Y%m%d"), ".png"),
+      width = 16,
+      height = 8,
+      device = "png")
+
+
+```
+
+```{r asz overall meal_line: KW36 - KW44}
+
+#prepare data
+df <- df_till_asz %>% 
+  group_by(ASZ, meal_line) %>% 
+  summarise(tot = sum(tot_sold, na.rm = TRUE)) %>% 
+  mutate(pct = tot / sum(tot)) %>% 
+  ungroup()
+
+#overall
+df_t <- df %>% 
+  group_by(meal_line) %>% 
+  summarise(tot = sum(tot)) %>% 
+  mutate(pct = tot / sum(tot),
+         ASZ = "Alle ASZ") %>% 
+  ungroup() %>% 
+  bind_rows(., df) %>% 
+  #change names of the canteens resp. ASZ
+  mutate(ASZ_p = if_else(ASZ == "AZ1", "AZ1 (K)", ASZ))
+
+#define xlab
+df_p <- df_t %>% 
+  group_by(ASZ_p) %>% 
+  summarise(tot_t = sum(tot)) %>% 
+  mutate(xlab_ = paste0("(n = ", tot_t, ")"),
+           xlab = paste(.$ASZ_p, xlab_, sep = "\n")) %>% 
+  select(-xlab_) %>% 
+  left_join(df_t, ., by = "ASZ_p") %>% 
+  ungroup()
+  
+#plot
+p <- ggplot(df_p, aes(x = forcats::fct_rev(factor(xlab)), y = pct, 
+                      fill = factor(meal_line, levels = c("wochenhit", "menu2", "menu1"),
+                                    labels = c("Wochenhit", "Menü 2", "Menü 1")))) +
+  geom_bar(stat = "identity", position = position_stack(), width = .6) + 
+  scale_fill_manual(values = c("Wochenhit" = "#f9ecbc",
+                               "Menü 2" = "#c1cf3b", "Menü 1" = "#eeda51")) +
+  geom_text(aes(label=ifelse(pct > .015,
+                             scales::percent(round(pct, 2),
+                                             accuracy = 1), "")), 
+            size = 22*converter, position = position_stack(vjust = 0.52),
+            family = theme_get()$text$family)+
+  coord_flip()+
+  labs(x = "", y = "\nVerkaufte Gerichte in Prozent\n")+
+  guides(fill = guide_legend("", reverse = T, nrow = 1))+
+  scale_y_origin(labels=scales::percent)+
+  mytheme +
+  theme(legend.position = "bottom")
+
+
+ggsave(plot = p,
+      filename =  paste0(till_plot_asz, colnames(df_p)[1], "_intervention_", "kw35_kw44",  
+                                             format(Sys.Date(), "%Y%m%d"),
+                         ".pdf"),
+      width = 16,
+      height = 8,
+      device = cairo_pdf)
+
+ggsave(plot = p,
+      filename =  paste0(till_plot_asz, colnames(df_p)[1], "_intervention_", "kw35_kw44",  
+                                             format(Sys.Date(), "%Y%m%d"),
+                         ".png"),
+      width = 16,
+      height = 8,
+      device = "png")
+
+```
+
+```{r meal line and content: KW 36-KW44}
+
+
+#prepare data
+df <- df_till_asz %>% 
+  group_by(ASZ, meal_line, meal_label) %>% 
+  summarise(tot = sum(tot_sold, na.rm = TRUE)) %>% 
+  mutate(pct = tot / sum(tot)) %>% 
+  ungroup() %>% 
+  #drop schoncost and wochenhit
+  filter(str_detect(meal_line, "schonkost|wochenhit", negate = TRUE)) %>% 
+  #change names of the canteens resp. ASZ
+  mutate(ASZ_p = if_else(ASZ == "AZ1", "AZ1 (K)", ASZ)) %>%  
+  mutate(meal_line = if_else(meal_line == "menu1", "Menü 1", "Menü 2"))
+
+#define xlab
+df_p <- df %>% 
+  group_by(ASZ_p, meal_line) %>% 
+  summarise(tot_t = sum(tot)) %>% 
+  ungroup() %>% 
+  mutate(xlab_ = paste0("(n = ", tot_t, ")"),
+           xlab = paste(.$ASZ_p, xlab_, sep = "\n")) %>% 
+  select(-xlab_) %>% 
+  left_join(df, ., by = c("ASZ_p", "meal_line"))
+  
+#plot
+p <- ggplot(df_p, aes(x = xlab, y = pct, 
+                      fill = factor(meal_label, labels = c("Fleisch", "Vegetarisch")))) +
+  geom_bar(stat = "identity", position = position_stack(), width = .6) + 
+  scale_fill_manual(values = c("Fleisch" = "#eeda51", "Vegetarisch" = "#c1cf3b")) +
+  geom_text(aes(label=ifelse(pct > .015,
+                             scales::percent(round(pct, 2),
+                                             accuracy = 1), "")), 
+            size = 22*converter, position = position_stack(vjust = 0.52),
+            family = theme_get()$text$family)+
+  facet_grid(~meal_line, scales = "free") +
+  labs(x = "", y = "\nVerkaufte Gerichte in Prozent\n")+
+  guides(fill = guide_legend("Menüinhalt")) +
+  scale_y_origin(labels=scales::percent) +
+  mytheme
+
+
+#export as pdf and "png"
+ggsave(plot = p,
+      filename =  paste0(till_plot_asz, "meal_content_meal_line_", "kw35_kw44_", 
+                                             format(Sys.Date(), "%Y%m%d"),
+                         ".pdf"),
+      width =16,
+      height = 12,
+      device = cairo_pdf)
+
+ggsave(plot = p,
+      filename =  paste0(till_plot_asz, "meal_content_meal_line_", "kw35_kw44_", 
+                                             format(Sys.Date(), "%Y%m%d"),
+                         ".png"),
+      width =16,
+      height = 12,
+      device = "png")
+
+```
+
+
+```{r pre post intervention per canteen: KW36-KW44}
+
+#pay attention to the encoding => it changes sometimes back to uft-8
+#plot AZ1
+plot_interv_asz(df_till_asz, asz = "AZ1", lab = "", save = TRUE, height = 7, width = 16)
+
+#plot AZ2
+plot_interv_asz(df_till_asz, asz = "AZ2", lab = "", save = TRUE, height = 7, width = 16)
+
+#plot AZ4
+plot_interv_asz(df_till_asz, asz = "AZ4", lab = "", save = TRUE, height = 7, width = 16)
+
+#plot AZ3
+plot_interv_asz(df_till_asz, asz = "AZ3", lab = "", save = TRUE, height = 7, width = 16) 
+
+
+```
+
+```{r plot all above in one: KW36-KW44}
+
+plot_interv_asz(df_till_asz, asz = "all", save = TRUE, height = 10, width = 24)
+
+```
+
+
+```{r intervention AZ3: amusebouche}
+
+##########
+#per day
+#########
+AZ3_amuse %>% 
+  filter(info_amis == "Bewohner zum Nachtessen im Saal" | info_amis == "Amouse Bouche probiert") %>% 
+  group_by(date, info_amis) %>%  # mabe there is a way to do date + 1 to compare it with date
+  summarise(tot = sum(tot)) %>% 
+  ungroup() %>% 
+  # bing in into wide format, attention stupids variable names
+  pivot_wider(names_from = c("info_amis"), values_from = tot) %>% 
+  # calculate the percentage tried per week
+  #kw 37 and kw 41 seems weird
+  mutate(pct_tried = `Amouse Bouche probiert` / `Bewohner zum Nachtessen im Saal`) %>% 
+  #drop all vegidays, they disort the results
+  mutate(wday = wday(date, label = TRUE, abbr = FALSE)) %>%
+  filter(wday != "Donnerstag") -> stat_amuse
+
+
+#mean of tried
+mean(stat_amuse$pct_tried, na.rm = TRUE)
+range(stat_amuse$pct_tried, na.rm = TRUE)
+
+#selling vegetarian meals
+vegi_sell <- df_till_asz %>% 
+  filter(ASZ == "AZ3" & meal_label == "vegetarian" & condit == "Intervention") %>% 
+  #substract one due to the tasting at the evening (not at the same date)
+  mutate(date_fake = date - 1) %>% 
+  #group, however keep both dates to check
+  group_by(date_fake, date , meal_label) %>% 
+  summarise(vegi_sold = sum(tot_sold)) %>% 
+  ungroup() %>% 
+  #drop all vegidays, they disort the results
+  mutate(wday = wday(date_fake, label = TRUE, abbr = FALSE)) %>%
+  filter(wday != "Mittwoch") # because of -1 
+
+#merge together
+df_t <- left_join(stat_amuse, vegi_sell[, c("date_fake", "vegi_sold")], by = c("date" = "date_fake")) #some infos are missing, due to the vegi-day in thursday (someday they stoped to give amuse bouche in the wednesday)
+
+#plot
+ggplot(df_t, aes(y = pct_tried, x =vegi_sold)) +
+  geom_point() +
+  geom_smooth(method = "lm") 
+
+#test that
+cor.test(df_t$vegi_sold, df_t$pct_tried, method = "spearman") # no korrelation at all
+
+```
+
+
+```{r top 10}
+# calculate relative sellings according day sellings 
+# to do: to have a more comparable method
+df <- df_till_asz %>% 
+  drop_na(meal_content) %>% 
+  arrange(desc(tot_sold))
+  # mutate(rank = 1:nrow(.))
+  
+# calculate relative sellings according day sellings 
+df_till_asz %>% 
+  filter(meal_label == "meat" & condit == "Intervention") %>% 
+  group_by(meal_content) %>%
+  summarise(tot = sum(tot_sold)) %>% 
+  arrange(desc(tot)) %>% 
+  write_delim(here("augmented data/top_meat_asz_2021_01_14.csv"), delim = ",")
+
+#top 10 vegi meals
+df_till_asz %>% 
+  filter(meal_label == "vegetarian" & condit == "Intervention") %>% 
+  group_by(meal_content) %>%
+  summarise(tot = sum(tot_sold)) %>% 
+  arrange(desc(tot)) %>% 
+  slice(1:10) %>% 
+  write_delim(here("augmented data/top_vegi_asz_2021_01_14.csv"), delim = ",")
+
+```
+
