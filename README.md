@@ -3,7 +3,7 @@
 
 # Energie- und klimabewusste Ernährung in städtischen Verpflegungsbetrieben
 
-Ein Forschungsprojekt finanziert von der Energieforschung Zürich. Für mehr Informationen: https://www.energieforschung-zuerich.ch/index.php?id=21#c720
+Ein Forschungsprojekt finanziert von der Energieforschung Zürich. Für mehr Informationen: [hier](https://energieforschung-zuerich.ch/de/projekte/energie-und-klimabewusste-ernahrung-stadtischen-verpflegungsbetrieben/)
 
 In diesem Repositorium befinden sich alle Skripte, die für die Aufbereitung, Bearbeitung und (deskriptive) Analyse von Kassen- und Befragungsdaten.
 
