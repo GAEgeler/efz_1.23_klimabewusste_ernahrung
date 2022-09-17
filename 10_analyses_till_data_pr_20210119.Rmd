@@ -478,8 +478,8 @@ dt <- dt_pr_2020 %>%
   #change week name
   mutate(kwn = case_when(kw == 35 ~ "Wo3",
                         kw == 36 ~ "Wo4",
-                        kw == 42 ~ "WoInt10",
-                        kw == 43 ~ "WoInt11")) %>% 
+                        kw == 42 ~ "WoInt11",
+                        kw == 43 ~ "WoInt12")) %>% 
   #take only the one meal_line
   # drop_na(meal_content) %>% 
   group_by(pr, kwn, meal_label) %>% 
